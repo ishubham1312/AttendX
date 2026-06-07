@@ -19,12 +19,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final AnimationController _animCtrl;
   final String _previewStatus = 'present';
-  
-  // -- Test notification state --
-  late DateTime _testTime;
-  bool _testScheduled = false;
-  bool? _batteryOptDisabled;
-  bool? _exactAlarmGranted;
 
   @override
   bool get wantKeepAlive => true;
@@ -32,26 +26,10 @@ class _ProfilesScreenState extends State<ProfilesScreen>
   @override
   void initState() {
     super.initState();
-    _testTime = DateTime.now().add(const Duration(minutes: 2));
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
-    _checkPermissionsStatus();
-  }
-
-  Future<void> _checkPermissionsStatus() async {
-    final provider = context.read<AppProvider>();
-    final batteryDisabled =
-        await provider.notifications.isBatteryOptimizationDisabled();
-    final alarmGranted =
-        await provider.notifications.isExactAlarmPermissionGranted();
-    if (mounted) {
-      setState(() {
-        _batteryOptDisabled = batteryDisabled;
-        _exactAlarmGranted = alarmGranted;
-      });
-    }
   }
 
   @override
@@ -144,7 +122,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
               child: Row(
                 children: [
                   const Text(
-                    'Profile Center',
+                    'Profile',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
@@ -153,46 +131,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     ),
                   ),
                   const Spacer(),
-                  GestureDetector(
-                    onTap: () async {
-                      final p = provider.activeProfile;
-                      if (p == null) return;
-                      await provider.notifications.requestPermissions();
-                      await provider.notifications.showTestNow(
-                        profileId: p.id,
-                        profileName: p.name,
-                      );
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            behavior: SnackBarBehavior.floating,
-                            content: Text('Test reminder sent successfully.'),
-                          ),
-                        );
-                      }
-                    },
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.04),
-                            blurRadius: 10,
-                            offset: const Offset(0, 4),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(
-                        Icons.notifications_active_outlined,
-                        color: AppColors.forestGreen,
-                        size: 20,
-                      ),
-                    ),
-                  ),
+                  // Add profile button
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -207,19 +146,13 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.vibrantGreen.withValues(
-                              alpha: 0.3,
-                            ),
+                            color: AppColors.vibrantGreen.withValues(alpha: 0.3),
                             blurRadius: 10,
                             offset: const Offset(0, 4),
                           ),
                         ],
                       ),
-                      child: const Icon(
-                        Icons.add,
-                        color: Colors.white,
-                        size: 22,
-                      ),
+                      child: const Icon(Icons.add, color: Colors.white, size: 22),
                     ),
                   ),
                 ],
@@ -232,8 +165,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
               padding: const EdgeInsets.fromLTRB(20, 0, 20, 110),
               physics: const BouncingScrollPhysics(),
               children: [
-                _buildNotificationTestCard(provider),
-                const SizedBox(height: 8),
                 // Profiles List
                 ...List.generate(profiles.length, (i) {
                   final p = profiles[i];
@@ -247,7 +178,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                         margin: const EdgeInsets.only(bottom: 14),
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: Theme.of(context).colorScheme.surface,
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isActive
@@ -258,9 +189,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           boxShadow: [
                             BoxShadow(
                               color: isActive
-                                  ? AppColors.forestGreen.withValues(
-                                      alpha: 0.06,
-                                    )
+                                  ? AppColors.forestGreen.withValues(alpha: 0.06)
                                   : Colors.black.withValues(alpha: 0.03),
                               blurRadius: 16,
                               offset: const Offset(0, 8),
@@ -273,17 +202,13 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                               width: 52,
                               height: 52,
                               decoration: BoxDecoration(
-                                gradient: isActive
-                                    ? AppColors.heroGradient
-                                    : null,
+                                gradient: isActive ? AppColors.heroGradient : null,
                                 color: isActive ? null : AppColors.screenBg,
                                 shape: BoxShape.circle,
                               ),
                               child: Center(
                                 child: Text(
-                                  p.name.isNotEmpty
-                                      ? p.name[0].toUpperCase()
-                                      : '?',
+                                  p.name.isNotEmpty ? p.name[0].toUpperCase() : '?',
                                   style: TextStyle(
                                     color: isActive
                                         ? Colors.white
@@ -313,15 +238,12 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                                         const SizedBox(width: 8),
                                         Container(
                                           padding: const EdgeInsets.symmetric(
-                                            horizontal: 8,
-                                            vertical: 3,
-                                          ),
+                                              horizontal: 8, vertical: 3),
                                           decoration: BoxDecoration(
                                             color: AppColors.forestGreen
                                                 .withValues(alpha: 0.08),
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
+                                            borderRadius:
+                                                BorderRadius.circular(10),
                                           ),
                                           child: const Text(
                                             'Active',
@@ -348,44 +270,31 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                               ),
                             ),
                             PopupMenuButton<String>(
-                              icon: const Icon(
-                                Icons.more_vert,
-                                color: AppColors.textSubtle,
-                              ),
+                              icon: const Icon(Icons.more_vert,
+                                  color: AppColors.textSubtle),
                               elevation: 8,
                               shadowColor: Colors.black.withValues(alpha: 0.1),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
+                                  borderRadius: BorderRadius.circular(14)),
                               onSelected: (v) {
                                 if (v == 'edit') {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          ProfileSetupScreen(existing: p),
-                                    ),
-                                  );
+                                  Navigator.of(context).push(MaterialPageRoute(
+                                    builder: (_) =>
+                                        ProfileSetupScreen(existing: p),
+                                  ));
                                 } else if (v == 'delete') {
-                                  _confirmDelete(
-                                    context,
-                                    provider,
-                                    p.id,
-                                    p.name,
-                                    profiles.length,
-                                  );
+                                  _confirmDelete(context, provider, p.id,
+                                      p.name, profiles.length);
                                 }
                               },
                               itemBuilder: (_) => [
                                 const PopupMenuItem(
-                                  value: 'edit',
-                                  child: Text('Edit Profile'),
-                                ),
+                                    value: 'edit', child: Text('Edit Profile')),
                                 const PopupMenuItem(
                                   value: 'delete',
-                                  child: Text(
-                                    'Delete Profile',
-                                    style: TextStyle(color: AppColors.absent),
-                                  ),
+                                  child: Text('Delete Profile',
+                                      style:
+                                          TextStyle(color: AppColors.absent)),
                                 ),
                               ],
                             ),
@@ -396,7 +305,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                   );
                 }),
 
-                // Divider and Widgets Section
+                // Widgets Section
                 const SizedBox(height: 16),
                 animatedItem(
                   profiles.length + 1,
@@ -427,7 +336,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 20),
 
                 if (active == null)
@@ -436,7 +344,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.surface,
                         borderRadius: BorderRadius.circular(20),
                       ),
                       child: const Center(
@@ -449,7 +357,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     ),
                   )
                 else ...[
-                  // Compute stats values
                   _buildWidgetPreviewItem(
                     index: profiles.length + 3,
                     title: '1x1 Widget',
@@ -460,9 +367,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                         height: 115,
                         child: Widget1x1Preview(
                           status: _previewStatus,
-                          time: _previewStatus == 'pending'
-                              ? 'Mark Today'
-                              : '09:02 AM',
+                          time: '09:02 AM',
                         ),
                       ),
                     ),
@@ -473,7 +378,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           'com.attendancetracker.attend.WidgetProvider1x1',
                     ),
                   ),
-
                   _buildWidgetPreviewItem(
                     index: profiles.length + 4,
                     title: '2x1 Widget',
@@ -484,9 +388,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                         child: Widget2x1Preview(
                           status: _previewStatus,
                           time: '09:02 AM',
-                          dateStr: DateFormat(
-                            'MMMM dd, yyyy',
-                          ).format(DateTime.now()),
+                          dateStr: DateFormat('MMMM dd, yyyy').format(DateTime.now()),
                           scoreStr:
                               '${provider.stats(month: DateTime.now()).percentage.toStringAsFixed(1)}%',
                         ),
@@ -499,7 +401,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           'com.attendancetracker.attend.WidgetProvider2x1',
                     ),
                   ),
-
                   _buildWidgetPreviewItem(
                     index: profiles.length + 5,
                     title: '2x2 Widget',
@@ -536,7 +437,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           'com.attendancetracker.attend.WidgetProvider2x2',
                     ),
                   ),
-
                   _buildWidgetPreviewItem(
                     index: profiles.length + 6,
                     title: '4x2 Widget',
@@ -559,25 +459,23 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                           .toString(),
                       earnedSalary:
                           NumberFormat.currency(symbol: '₹', decimalDigits: 0)
-                              .format(
-                                provider
-                                    .stats(month: DateTime.now())
-                                    .earnedSalary,
-                              )
+                              .format(provider
+                                  .stats(month: DateTime.now())
+                                  .earnedSalary)
                               .trim(),
-                      estimatedSalary: NumberFormat.currency(
-                        symbol: '₹',
-                        decimalDigits: 0,
-                      ).format(active.monthlySalary).trim(),
+                      estimatedSalary:
+                          NumberFormat.currency(symbol: '₹', decimalDigits: 0)
+                              .format(active.monthlySalary)
+                              .trim(),
                       progress: active.monthlySalary == 0
                           ? 0
                           : ((provider
-                                            .stats(month: DateTime.now())
-                                            .earnedSalary /
-                                        active.monthlySalary) *
-                                    100)
-                                .round()
-                                .clamp(0, 100),
+                                          .stats(month: DateTime.now())
+                                          .earnedSalary /
+                                      active.monthlySalary) *
+                                  100)
+                              .round()
+                              .clamp(0, 100),
                     ),
                     onPin: () => _pinWidget(
                       name: 'WidgetProvider4x2',
@@ -595,13 +493,8 @@ class _ProfilesScreenState extends State<ProfilesScreen>
     );
   }
 
-  void _confirmDelete(
-    BuildContext context,
-    AppProvider provider,
-    String id,
-    String name,
-    int total,
-  ) {
+  void _confirmDelete(BuildContext context, AppProvider provider, String id,
+      String name, int total) {
     if (total <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -615,327 +508,26 @@ class _ProfilesScreenState extends State<ProfilesScreen>
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Delete Profile?',
-          style: TextStyle(fontWeight: FontWeight.w800),
-        ),
+        title: const Text('Delete Profile?',
+            style: TextStyle(fontWeight: FontWeight.w800)),
         content: Text(
-          'This will permanently delete $name and all of their historical attendance logs.',
-        ),
+            'This will permanently delete $name and all of their historical attendance logs.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Cancel',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: const Text('Cancel',
+                style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600)),
           ),
           TextButton(
             onPressed: () {
               provider.deleteProfile(id);
               Navigator.pop(context);
             },
-            child: const Text(
-              'Delete',
-              style: TextStyle(
-                color: AppColors.absent,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ============ NOTIFICATION TESTER CARD ============
-  Widget _buildNotificationTestCard(AppProvider provider) {
-    final active = provider.activeProfile;
-    final timeStr = TimeOfDay.fromDateTime(_testTime).format(context);
-    final now = DateTime.now();
-    final diff = _testTime.difference(now);
-    final minsLeft = diff.inMinutes;
-    final isPast = _testTime.isBefore(now);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Colors.amber.shade300,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.amber.withValues(alpha: 0.08),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.amber.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.science_outlined,
-                    color: Colors.amber.shade700, size: 20),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Notification Tester',
-                        style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary)),
-                    SizedBox(height: 2),
-                    Text(
-                      'Schedule, kill app, verify delivery',
-                      style: TextStyle(
-                          fontSize: 11.5, color: AppColors.textSecondary),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Time picker row
-          GestureDetector(
-            onTap: () async {
-              final t = await showTimePicker(
-                context: context,
-                initialTime: TimeOfDay.fromDateTime(_testTime),
-              );
-              if (t != null) {
-                setState(() {
-                  final now = DateTime.now();
-                  var picked = DateTime(
-                      now.year, now.month, now.day, t.hour, t.minute);
-                  if (picked.isBefore(now)) {
-                    picked = picked.add(const Duration(days: 1));
-                  }
-                  _testTime = picked;
-                  _testScheduled = false;
-                });
-              }
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFFBEB),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: Colors.amber.shade200),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.access_time_rounded,
-                      color: Colors.amber.shade700, size: 20),
-                  const SizedBox(width: 10),
-                  Text(
-                    timeStr,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.amber.shade900,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    isPast
-                        ? '(tomorrow)'
-                        : minsLeft < 1
-                            ? '(< 1 min)'
-                            : '(in $minsLeft min)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.amber.shade600,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text('Change',
-                      style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.amber.shade700)),
-                  const SizedBox(width: 4),
-                  Icon(Icons.chevron_right,
-                      size: 16, color: Colors.amber.shade700),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Schedule button
-          SizedBox(
-            width: double.infinity,
-            height: 44,
-            child: ElevatedButton.icon(
-              onPressed: _testScheduled || active == null
-                  ? null
-                  : () async {
-                      await provider.notifications.requestPermissions();
-                      await provider.notifications.scheduleTestNotification(
-                        scheduledTime: _testTime,
-                        profileId: active.id,
-                        profileName: active.name,
-                      );
-                      setState(() => _testScheduled = true);
-                      if (mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            behavior: SnackBarBehavior.floating,
-                            content: Text(
-                              'Test notification scheduled for $timeStr — kill the app now!',
-                            ),
-                            backgroundColor: Colors.amber.shade700,
-                          ),
-                        );
-                      }
-                    },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.amber.shade700,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey.shade300,
-                elevation: 0,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
-              ),
-              icon: Icon(
-                  _testScheduled ? Icons.check_circle : Icons.schedule_send,
-                  size: 18),
-              label: Text(
-                _testScheduled
-                    ? 'Scheduled! Kill the app now'
-                    : 'Schedule Test Notification',
-                style:
-                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-
-          // Battery optimization row
-          GestureDetector(
-            onTap: () async {
-              await provider.notifications
-                  .requestDisableBatteryOptimization();
-              Future.delayed(const Duration(seconds: 2), () {
-                _checkPermissionsStatus();
-              });
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: _batteryOptDisabled == true
-                    ? const Color(0xFFECFDF5)
-                    : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _batteryOptDisabled == true
-                        ? Icons.battery_charging_full
-                        : Icons.battery_alert,
-                    color: _batteryOptDisabled == true
-                        ? AppColors.forestGreen
-                        : Colors.red.shade600,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _batteryOptDisabled == true
-                          ? 'Battery optimization disabled ✓'
-                          : 'Battery optimization ON — tap to fix',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _batteryOptDisabled == true
-                            ? AppColors.forestGreen
-                            : Colors.red.shade700,
-                      ),
-                    ),
-                  ),
-                  if (_batteryOptDisabled != true)
-                    Icon(Icons.chevron_right,
-                        size: 16, color: Colors.red.shade400),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-
-          // Alarms & Reminders permission row
-          GestureDetector(
-            onTap: () async {
-              await provider.notifications.requestExactAlarmPermission();
-              Future.delayed(const Duration(seconds: 2), () {
-                _checkPermissionsStatus();
-              });
-            },
-            child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: _exactAlarmGranted == true
-                    ? const Color(0xFFECFDF5)
-                    : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    _exactAlarmGranted == true
-                        ? Icons.alarm_on
-                        : Icons.alarm_off,
-                    color: _exactAlarmGranted == true
-                        ? AppColors.forestGreen
-                        : Colors.red.shade600,
-                    size: 18,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _exactAlarmGranted == true
-                          ? 'Alarms & Reminders permission granted ✓'
-                          : 'Alarms & Reminders permission OFF — tap to fix',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: _exactAlarmGranted == true
-                            ? AppColors.forestGreen
-                            : Colors.red.shade700,
-                      ),
-                    ),
-                  ),
-                  if (_exactAlarmGranted != true)
-                    Icon(Icons.chevron_right,
-                        size: 16, color: Colors.red.shade400),
-                ],
-              ),
-            ),
+            child: const Text('Delete',
+                style: TextStyle(
+                    color: AppColors.absent, fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -982,23 +574,17 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 14.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                    Text(title,
+                        style: const TextStyle(
+                            fontSize: 14.5,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.textPrimary)),
                     const SizedBox(height: 1),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary)),
                   ],
                 ),
                 ElevatedButton.icon(
@@ -1008,23 +594,16 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
+                        horizontal: 12, vertical: 8),
                     minimumSize: Size.zero,
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+                        borderRadius: BorderRadius.circular(12)),
                   ),
                   icon: const Icon(Icons.add, size: 14),
-                  label: const Text(
-                    'Add',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  label: const Text('Add',
+                      style: TextStyle(
+                          fontSize: 11.5, fontWeight: FontWeight.bold)),
                 ),
               ],
             ),

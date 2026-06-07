@@ -100,6 +100,28 @@ class AppTheme {
     );
   }
 
+  static ThemeData get dark {
+    final base = ThemeData.dark(useMaterial3: true);
+    return base.copyWith(
+      scaffoldBackgroundColor: const Color(0xFF0D1117),
+      colorScheme: base.colorScheme.copyWith(
+        primary: AppColors.vibrantGreen,
+        secondary: AppColors.lime,
+        surface: const Color(0xFF161B22),
+      ),
+      textTheme: _textThemeDark(base.textTheme),
+      cardTheme: const CardThemeData(
+        color: Color(0xFF161B22),
+        elevation: 0,
+      ),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        foregroundColor: Color(0xFFE6EDF3),
+      ),
+    );
+  }
+
   static TextTheme _textTheme(TextTheme base) {
     TextStyle s(double size, FontWeight w,
             {Color c = AppColors.textPrimary, double ls = 0}) =>
@@ -112,6 +134,23 @@ class AppTheme {
       bodyLarge: s(15, FontWeight.w500, c: AppColors.textSecondary),
       bodyMedium: s(14, FontWeight.w400, c: AppColors.textSecondary),
       bodySmall: s(12, FontWeight.w400, c: AppColors.textSubtle),
+    );
+  }
+
+  static TextTheme _textThemeDark(TextTheme base) {
+    const primary = Color(0xFFE6EDF3);
+    const secondary = Color(0xFF8B949E);
+    const subtle = Color(0xFF484F58);
+    TextStyle s(double size, FontWeight w, {Color c = primary, double ls = 0}) =>
+        TextStyle(fontSize: size, fontWeight: w, color: c, letterSpacing: ls);
+    return base.copyWith(
+      displayLarge: s(36, FontWeight.w700, ls: -1),
+      headlineSmall: s(22, FontWeight.w600, ls: -0.5),
+      titleLarge: s(20, FontWeight.w600),
+      titleMedium: s(18, FontWeight.w700),
+      bodyLarge: s(15, FontWeight.w500, c: secondary),
+      bodyMedium: s(14, FontWeight.w400, c: secondary),
+      bodySmall: s(12, FontWeight.w400, c: subtle),
     );
   }
 }

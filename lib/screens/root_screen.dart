@@ -60,7 +60,7 @@ class _RootScreenState extends State<RootScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.screenBg,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       // By using Stack inside Scaffold body and positioning the custom bottom navigation bar
       // as an overlay, we completely bypass Scaffold's default bottom navigation container,
       // ensuring that no solid background box covers the screen content behind the pill.
@@ -132,10 +132,10 @@ class _AnimatedBottomNav extends StatelessWidget {
               padding: const EdgeInsets.symmetric(
                   horizontal: innerPadding, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.65), // Semi-transparent glass sheet
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(34),
                 border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.45), // Subtle bright glass border reflection
+                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
                   width: 1.5,
                 ),
               ),

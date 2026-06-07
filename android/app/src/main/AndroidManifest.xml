@@ -4,8 +4,11 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
 
     <application
         android:label="Attendance Tracker"
@@ -64,7 +67,8 @@
             android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
 
         <!-- Native Alarms -->
-        <receiver android:name=".AlarmReceiver" android:exported="true" />
+        <receiver android:name=".AlarmReceiver"
+            android:exported="true" />
         <receiver android:name=".AlarmActionReceiver" android:exported="false" />
         <receiver android:name=".AlarmBootReceiver" android:exported="true">
             <intent-filter>
@@ -74,6 +78,10 @@
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
             </intent-filter>
         </receiver>
+        <service
+            android:name=".AlarmNotificationService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
 
         <!-- Home Widgets -->
         <receiver android:name=".WidgetProvider1x1" android:exported="true">

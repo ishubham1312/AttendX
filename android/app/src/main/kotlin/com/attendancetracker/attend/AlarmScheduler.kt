@@ -22,6 +22,7 @@ object AlarmScheduler {
         isOneShot: Boolean = false
     ) {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+
         val intent = Intent(context, AlarmReceiver::class.java).apply {
             putExtra("id", id)
             putExtra("profileId", profileId)
@@ -32,53 +33,52 @@ object AlarmScheduler {
         }
 
         val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            id,
-            intent,
+            context, id, intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
         )
 
-        val calendar = Calendar.getInstance().apply {
-            timeInMillis = System.currentTimeMillis()
-            set(Calendar.HOUR_OF_DAY, hour)
-            set(Calendar.MINUTE, minute)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
-        }
-
-        // If time is in the past, add 1 day
-        if (calendar.timeInMillis <= System.currentTimeMillis()) {
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
-        }
-
-        val alarmInfo = AlarmManager.AlarmClockInfo(calendar.timeInMillis, pendingIntent)
+        val triggerMs = nextTriggerMs(hour, minute)
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setAlarmClock(alarmInfo, pendingIntent)
-                } else {
-                    alarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.RTC_WAKEUP,
-                        calendar.timeInMillis,
+            when {
+                // Android 12+ — check if exact alarms are allowed
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        // setAlarmClock shows in the system clock widget and is NEVER deferred
+                        alarmManager.setAlarmClock(
+                            AlarmManager.AlarmClockInfo(triggerMs, pendingIntent),
+                            pendingIntent
+                        )
+                        Log.d(TAG, "setAlarmClock at ${hour}:${minute} for $profileName (id=$id)")
+                    } else {
+                        // Fallback: still exact-ish, fires within ~1min even in Doze
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent
+                        )
+                        Log.w(TAG, "No SCHEDULE_EXACT_ALARM perm — used setExactAndAllowWhileIdle for $profileName")
+                    }
+                }
+                // Android 6-11
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M -> {
+                    alarmManager.setAlarmClock(
+                        AlarmManager.AlarmClockInfo(triggerMs, pendingIntent),
                         pendingIntent
                     )
+                    Log.d(TAG, "setAlarmClock (M+) at ${hour}:${minute} for $profileName (id=$id)")
                 }
-            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    calendar.timeInMillis,
-                    pendingIntent
-                )
-            } else {
-                alarmManager.setAlarmClock(alarmInfo, pendingIntent)
+                // Android < 6
+                else -> {
+                    alarmManager.setExact(AlarmManager.RTC_WAKEUP, triggerMs, pendingIntent)
+                    Log.d(TAG, "setExact at ${hour}:${minute} for $profileName (id=$id)")
+                }
             }
-            Log.d(TAG, "Scheduled alarm for profile $profileName (id: $id) at $hour:$minute (oneShot: $isOneShot)")
 
-            // Save alarm configuration for rescheduling on boot (only if NOT one-shot test)
+            // Persist so boot receiver can reschedule (only for repeating alarms)
             if (!isOneShot) {
-                val prefs = context.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
-                prefs.edit().putString(id.toString(), "$profileId|$profileName|$hour|$minute").apply()
+                context.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(id.toString(), "$profileId|$profileName|$hour|$minute")
+                    .apply()
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to schedule alarm: ${e.message}", e)
@@ -89,37 +89,49 @@ object AlarmScheduler {
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val intent = Intent(context, AlarmReceiver::class.java)
         val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            id,
-            intent,
+            context, id, intent,
             PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_MUTABLE
         )
-        if (pendingIntent != null) {
-            alarmManager.cancel(pendingIntent)
-            pendingIntent.cancel()
+        pendingIntent?.let {
+            alarmManager.cancel(it)
+            it.cancel()
         }
-
-        // Remove from persistent store
-        val prefs = context.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
-        prefs.edit().remove(id.toString()).apply()
-        Log.d(TAG, "Cancelled alarm for id: $id")
+        context.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
+            .edit().remove(id.toString()).apply()
+        Log.d(TAG, "Cancelled alarm id=$id")
     }
 
     fun rescheduleAllAlarms(context: Context) {
         val prefs = context.getSharedPreferences(ALARM_PREFS, Context.MODE_PRIVATE)
-        val all = prefs.all
-        Log.d(TAG, "Rescheduling all alarms. Count: ${all.size}")
-        for ((key, value) in all) {
-            val id = key.toIntOrNull() ?: continue
-            val data = value as? String ?: continue
+        Log.d(TAG, "Rescheduling ${prefs.all.size} alarms after boot")
+        for ((key, value) in prefs.all) {
+            val id    = key.toIntOrNull() ?: continue
+            val data  = value as? String ?: continue
             val parts = data.split("|")
-            if (parts.size >= 4) {
-                val profileId = parts[0]
-                val profileName = parts[1]
-                val hour = parts[2].toIntOrNull() ?: continue
-                val minute = parts[3].toIntOrNull() ?: continue
-                scheduleAlarm(context, id, profileId, profileName, hour, minute, false)
-            }
+            if (parts.size < 4) continue
+            val profileId   = parts[0]
+            val profileName = parts[1]
+            val hour        = parts[2].toIntOrNull() ?: continue
+            val minute      = parts[3].toIntOrNull() ?: continue
+            scheduleAlarm(context, id, profileId, profileName, hour, minute, false)
         }
+    }
+
+    /** Returns epoch millis for the next occurrence of hour:minute (today or tomorrow). */
+    private fun nextTriggerMs(hour: Int, minute: Int): Long {
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, hour)
+            set(Calendar.MINUTE, minute)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        if (cal.timeInMillis <= System.currentTimeMillis()) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        // Skip Sundays — advance to Monday
+        while (cal.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY) {
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        return cal.timeInMillis
     }
 }

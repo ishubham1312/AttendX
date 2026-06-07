@@ -24,7 +24,6 @@ Future<void> main() async {
 
   final provider = AppProvider(storage, notifications)..load();
 
-  // Handle quick-action taps from notifications -> mark today's attendance.
   notifications.onAction = (profileId, actionId) async {
     final today = DateTime.now();
     final date = DateTime(today.year, today.month, today.day);
@@ -37,8 +36,7 @@ Future<void> main() async {
         await provider.mark(date, AttendanceStatus.absent);
         break;
       case NotificationService.actionHalf:
-        await provider.mark(date, AttendanceStatus.halfDay,
-            half: HalfType.firstHalf);
+        await provider.mark(date, AttendanceStatus.halfDay, half: HalfType.firstHalf);
         break;
     }
   };
@@ -52,12 +50,15 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: provider,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: provider),
+      ],
       child: MaterialApp(
-        title: 'Attendance Tracker',
+        title: 'AttendX',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light,
+        themeMode: ThemeMode.light,
         home: const _Entry(),
       ),
     );

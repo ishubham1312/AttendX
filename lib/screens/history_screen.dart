@@ -124,7 +124,7 @@ class _HistoryScreenState extends State<HistoryScreen>
                   _circleBtn(Icons.chevron_left, () => _step(-1)),
                   const Spacer(),
                   const Text(
-                    'History & Logs',
+                    'History',
                     style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.w800,
