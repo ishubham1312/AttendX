@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:home_widget/home_widget.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
@@ -25,6 +26,9 @@ class _ProfilesScreenState extends State<ProfilesScreen>
   bool _isWidgetsExpanded = false;
   final UpdateService _updateService = UpdateService();
   bool _isCheckingUpdate = false;
+  String? _updateStatusText;
+  bool _showSimulationButton = false;
+  String _currentVersion = '';
 
   @override
   bool get wantKeepAlive => true;
@@ -32,10 +36,20 @@ class _ProfilesScreenState extends State<ProfilesScreen>
   @override
   void initState() {
     super.initState();
+    _loadCurrentVersion();
     _animCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 700),
     )..forward();
+  }
+
+  Future<void> _loadCurrentVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      setState(() {
+        _currentVersion = packageInfo.version;
+      });
+    } catch (_) {}
   }
 
   @override
@@ -537,89 +551,178 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     margin: const EdgeInsets.only(bottom: 24),
                     padding: const EdgeInsets.all(18),
                     decoration: softCard(radius: 20),
-                    child: Row(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Container(
-                          width: 44,
-                          height: 44,
-                          decoration: BoxDecoration(
-                            color: AppColors.forestGreen.withValues(alpha: 0.08),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.system_update_rounded,
-                            color: AppColors.forestGreen,
-                            size: 22,
-                          ),
+                        Row(
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(
+                                color: AppColors.forestGreen.withValues(alpha: 0.08),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.system_update_rounded,
+                                color: AppColors.forestGreen,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      const Text(
+                                        'App Updates',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w800,
+                                          color: AppColors.textPrimary,
+                                          letterSpacing: -0.3,
+                                        ),
+                                      ),
+                                      if (_currentVersion.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 6, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.forestGreen.withValues(alpha: 0.08),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'v$_currentVersion',
+                                            style: const TextStyle(
+                                              fontSize: 9.5,
+                                              fontWeight: FontWeight.w800,
+                                              color: AppColors.forestGreen,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _updateStatusText ?? 'Check for the latest version of AttendX',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: _updateStatusText != null &&
+                                              (_updateStatusText!.contains('private') ||
+                                                  _updateStatusText!.contains('failed') ||
+                                                  _updateStatusText!.contains('404'))
+                                          ? AppColors.absent
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _isCheckingUpdate
+                                ? const SizedBox(
+                                    width: 24,
+                                    height: 24,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.5,
+                                      valueColor: AlwaysStoppedAnimation(AppColors.forestGreen),
+                                    ),
+                                  )
+                                : ElevatedButton(
+                                    onPressed: () async {
+                                      setState(() {
+                                        _isCheckingUpdate = true;
+                                        _updateStatusText = 'Checking update...';
+                                      });
+                                      final result = await _updateService.checkForUpdate();
+                                      if (!mounted) return;
+                                      setState(() {
+                                        _isCheckingUpdate = false;
+                                        if (result.status == UpdateStatus.updateAvailable) {
+                                          _updateStatusText = 'Update available: v${result.info!.latestVersion}';
+                                          _showSimulationButton = false;
+                                          UpdateDialog.show(context, result.info!, _updateService);
+                                        } else if (result.status == UpdateStatus.noUpdate) {
+                                          _updateStatusText = 'AttendX is up to date!';
+                                          _showSimulationButton = false;
+                                        } else {
+                                          _updateStatusText = result.errorMessage ?? 'Update check failed.';
+                                          _showSimulationButton = true;
+                                        }
+                                      });
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.forestGreen,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                      minimumSize: Size.zero,
+                                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: const Text(
+                                      'Check',
+                                      style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                          ],
                         ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        if (_showSimulationButton) ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 8.0),
+                            child: Divider(height: 1, thickness: 0.5),
+                          ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              const Text(
-                                'App Updates',
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textPrimary,
-                                  letterSpacing: -0.3,
+                              const Expanded(
+                                child: Text(
+                                  'Want to test the Update Dialog UI anyway?',
+                                  style: TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.textSecondary,
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 2),
-                              const Text(
-                                'Check for the latest version of AttendX',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: AppColors.textSecondary,
+                              TextButton.icon(
+                                onPressed: () {
+                                  final dummyInfo = UpdateInfo(
+                                    latestVersion: '2.3.0',
+                                    releaseNotes: '• Beautiful new update dialog with animated entry transitions.\n• Integrated url_launcher for seamless browser redirects.\n• Dynamic custom circular download percentage bar.\n• Refined premium widgets and settings layouts.',
+                                    apkUrl: 'https://github.com/ishubham1312/AttendX/releases/download/v2.3.0/app-release.apk',
+                                    releaseDate: '2026-06-11',
+                                  );
+                                  UpdateDialog.show(context, dummyInfo, _updateService);
+                                },
+                                icon: const Icon(Icons.play_circle_outline_rounded, size: 16, color: AppColors.forestGreen),
+                                label: const Text(
+                                  'Simulate Flow',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.forestGreen,
+                                  ),
+                                ),
+                                style: TextButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                 ),
                               ),
                             ],
                           ),
-                        ),
-                        _isCheckingUpdate
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.5,
-                                  valueColor: AlwaysStoppedAnimation(AppColors.forestGreen),
-                                ),
-                              )
-                            : ElevatedButton(
-                                onPressed: () async {
-                                  setState(() => _isCheckingUpdate = true);
-                                  final info = await _updateService.checkForUpdate();
-                                  setState(() => _isCheckingUpdate = false);
-                                  if (!mounted) return;
-                                  if (info != null) {
-                                    UpdateDialog.show(context, info, _updateService);
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        behavior: SnackBarBehavior.floating,
-                                        content: Text('AttendX is up to date!'),
-                                      ),
-                                    );
-                                  }
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.forestGreen,
-                                  foregroundColor: Colors.white,
-                                  elevation: 0,
-                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                ),
-                                child: const Text(
-                                  'Check',
-                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
-                                ),
-                              ),
+                        ],
                       ],
                     ),
                   ),

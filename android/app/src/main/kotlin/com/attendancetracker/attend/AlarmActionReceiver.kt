@@ -51,10 +51,67 @@ class AlarmActionReceiver : BroadcastReceiver() {
             // Update HomeWidgetSharedPreferences so the widgets update instantly!
             val widgetPrefs = context.getSharedPreferences("HomeWidgetSharedPreferences", Context.MODE_PRIVATE)
             val timeStr = SimpleDateFormat("hh:mm a", Locale.getDefault()).format(Date())
+
+            val presentCountStr = widgetPrefs.getString("present_count", "0") ?: "0"
+            val halfDayCountStr = widgetPrefs.getString("half_day_count", "0") ?: "0"
+            val absentCountStr = widgetPrefs.getString("absent_count", "0") ?: "0"
+
+            var presentCount = presentCountStr.toIntOrNull() ?: 0
+            var halfDayCount = halfDayCountStr.toIntOrNull() ?: 0
+            var absentCount = absentCountStr.toIntOrNull() ?: 0
+
+            val previousStatus = widgetPrefs.getString("today_status", "pending") ?: "pending"
+
+            if (previousStatus != status) {
+                // Decrement previous status count if valid
+                when (previousStatus) {
+                    "present" -> if (presentCount > 0) presentCount--
+                    "absent" -> if (absentCount > 0) absentCount--
+                    "halfDay" -> if (halfDayCount > 0) halfDayCount--
+                }
+
+                // Increment new status count
+                when (status) {
+                    "present" -> presentCount++
+                    "absent" -> absentCount++
+                    "halfDay" -> halfDayCount++
+                }
+            }
+
+            val totalConsidered = presentCount + absentCount + halfDayCount
+            val effectiveDays = presentCount + halfDayCount * 0.5
+            val percentage = if (totalConsidered == 0) 0.0 else (effectiveDays / totalConsidered) * 100.0
+            val scoreText = String.format(Locale.US, "%.1f%%", percentage)
+
+            // Get monthly salary defensively
+            val monthlySalary = try {
+                widgetPrefs.getFloat("monthly_salary", 0f).toDouble()
+            } catch (e: Exception) {
+                try {
+                    widgetPrefs.getString("monthly_salary", "0")?.toDoubleOrNull() ?: 0.0
+                } catch (e2: Exception) {
+                    0.0
+                }
+            }
+
+            val perDaySalary = monthlySalary / 30.0
+            val earned = perDaySalary * effectiveDays
+
+            val earnedSalaryStr = "₹" + String.format(Locale.US, "%,d", Math.round(earned))
+            val estimatedSalaryStr = "₹" + String.format(Locale.US, "%,d", Math.round(monthlySalary))
+            val salaryProgressPercent = if (monthlySalary == 0.0) 0 else Math.min(100, Math.max(0, Math.round((earned / monthlySalary) * 100.0).toInt()))
+
             widgetPrefs.edit().apply {
                 putString("today_status", status)
                 putString("today_time", timeStr)
                 putString("profile_name", profileName)
+                putString("present_count", presentCount.toString())
+                putString("half_day_count", halfDayCount.toString())
+                putString("absent_count", absentCount.toString())
+                putString("attendance_score", scoreText)
+                putString("earned_salary", earnedSalaryStr)
+                putString("estimated_salary", estimatedSalaryStr)
+                putInt("salary_progress", salaryProgressPercent)
                 apply()
             }
 

@@ -1,7 +1,7 @@
 name: attendance_tracker
 description: "Attendance Tracker - track daily attendance and salary effortlessly."
-publish_to: 'none'
-version: 2.2.5+1
+publish_to: "none"
+version: 2.3.5+1
 
 environment:
   sdk: ^3.9.2
@@ -22,6 +22,7 @@ dependencies:
   dio: ^5.9.2
   path_provider: ^2.1.5
   open_filex: ^4.7.0
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

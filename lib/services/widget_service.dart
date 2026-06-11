@@ -70,6 +70,7 @@ class WidgetService {
     await HomeWidget.saveWidgetData<String>('earned_salary', earnedStr);
     await HomeWidget.saveWidgetData<String>('estimated_salary', estimatedStr);
     await HomeWidget.saveWidgetData<int>('salary_progress', salaryProgressPercent);
+    await HomeWidget.saveWidgetData<double>('monthly_salary', profile.monthlySalary);
 
     // Update each widget provider
     await HomeWidget.updateWidget(qualifiedAndroidName: 'com.attendancetracker.attend.WidgetProvider1x1');

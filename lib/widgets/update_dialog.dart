@@ -1,4 +1,7 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/update_service.dart';
 import '../theme/app_theme.dart';
 
@@ -43,6 +46,20 @@ class _UpdateDialogState extends State<UpdateDialog> {
   String _error = '';
 
   Future<void> _startDownload() async {
+    // If we are on Web or not Android, open in browser
+    if (kIsWeb || !Platform.isAndroid) {
+      final uri = Uri.parse(widget.updateInfo.apkUrl);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        if (mounted) Navigator.of(context).pop();
+      } else {
+        setState(() {
+          _error = 'Could not launch browser download link.';
+        });
+      }
+      return;
+    }
+
     setState(() {
       _isDownloading = true;
       _error = '';

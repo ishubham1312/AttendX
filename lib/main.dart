@@ -342,9 +342,9 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
                 setState(() => _showSplash = false);
                 
                 // Check for updates
-                final updateInfo = await _updateService.checkForUpdate();
-                if (updateInfo != null && context.mounted) {
-                  UpdateDialog.show(context, updateInfo, _updateService);
+                final result = await _updateService.checkForUpdate();
+                if (result.status == UpdateStatus.updateAvailable && result.info != null && context.mounted) {
+                  UpdateDialog.show(context, result.info!, _updateService);
                 }
 
                 if (_pendingWidgetAction) {
