@@ -366,7 +366,7 @@ class _AlarmCard extends StatelessWidget {
                               child: Switch(
                                 value: alarm.isEnabled,
                                 onChanged: onToggle,
-                                activeColor: Colors.white,
+                                activeThumbColor: Colors.white,
                                 activeTrackColor: AppColors.forestGreen,
                                 inactiveThumbColor: Colors.grey.shade400,
                                 inactiveTrackColor: Colors.grey.shade200,
@@ -754,7 +754,7 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
                   Switch(
                     value: _isRepeating,
                     onChanged: (v) => setState(() => _isRepeating = v),
-                    activeColor: Colors.white,
+                    activeThumbColor: Colors.white,
                     activeTrackColor: AppColors.forestGreen,
                     inactiveThumbColor: Colors.grey.shade400,
                     inactiveTrackColor: Colors.grey.shade200,
