@@ -380,10 +380,6 @@ class AppProvider extends ChangeNotifier {
           (date.year != month.year || date.month != month.month)) {
         return;
       }
-      if (date.isBefore(
-          DateTime(p.startDate.year, p.startDate.month, p.startDate.day))) {
-        return;
-      }
 
       var effectiveStatus = entry.status;
       if (effectiveStatus == AttendanceStatus.holiday) {

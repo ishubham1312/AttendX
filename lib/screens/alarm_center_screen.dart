@@ -217,197 +217,299 @@ class _AlarmCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isEnabled = alarm.isEnabled;
+
     return GestureDetector(
       onTap: onEdit,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(18),
+        margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(20),
-          border: alarm.isPrimary
-              ? Border.all(
-                  color: AppColors.forestGreen.withValues(alpha: 0.3),
-                  width: 1.5,
-                )
-              : null,
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: alarm.isPrimary
+                ? AppColors.forestGreen.withValues(alpha: 0.15)
+                : Colors.black.withValues(alpha: 0.04),
+            width: 1.5,
+          ),
           boxShadow: [
             BoxShadow(
-              color: alarm.isEnabled
-                  ? Colors.black.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.02),
+              color: isEnabled
+                  ? AppColors.forestGreen.withValues(alpha: 0.04)
+                  : Colors.black.withValues(alpha: 0.01),
               blurRadius: 16,
               offset: const Offset(0, 8),
             ),
           ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                // Alarm icon
-                Container(
-                  width: 46,
-                  height: 46,
-                  decoration: BoxDecoration(
-                    gradient: alarm.isPrimary
-                        ? AppColors.heroGradient
-                        : null,
-                    color: alarm.isPrimary
-                        ? null
-                        : (alarm.isEnabled
-                            ? AppColors.forestGreen.withValues(alpha: 0.08)
-                            : AppColors.screenBg),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    alarm.isPrimary
-                        ? Icons.notifications_active_rounded
-                        : Icons.alarm_rounded,
-                    color: alarm.isPrimary
-                        ? Colors.white
-                        : (alarm.isEnabled
-                            ? AppColors.forestGreen
-                            : AppColors.textSubtle),
-                    size: 22,
-                  ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Stack(
+            children: [
+              // Active status accent bar on the left edge
+              Positioned(
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: 6,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 250),
+                  color: isEnabled
+                      ? AppColors.forestGreen
+                      : Colors.grey.shade300,
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            alarm.name,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: alarm.isEnabled
-                                  ? AppColors.textPrimary
-                                  : AppColors.textSubtle,
-                            ),
-                          ),
-                          if (alarm.isPrimary) ...[
-                            const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: AppColors.forestGreen
-                                    .withValues(alpha: 0.08),
-                                borderRadius: BorderRadius.circular(10),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 18, 18),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Left: Icon & Title/Time
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  // Icon
+                                  Container(
+                                    width: 32,
+                                    height: 32,
+                                    decoration: BoxDecoration(
+                                      color: isEnabled
+                                          ? AppColors.forestGreen.withValues(alpha: 0.08)
+                                          : Colors.grey.shade100,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      alarm.isPrimary
+                                          ? Icons.notifications_active_rounded
+                                          : Icons.alarm_rounded,
+                                      color: isEnabled
+                                          ? AppColors.forestGreen
+                                          : AppColors.textSubtle,
+                                      size: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Text(
+                                              alarm.name,
+                                              style: TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w800,
+                                                color: isEnabled
+                                                    ? AppColors.textPrimary
+                                                    : AppColors.textSubtle,
+                                                letterSpacing: -0.2,
+                                              ),
+                                            ),
+                                            if (alarm.isPrimary) ...[
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                    horizontal: 8, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.forestGreen
+                                                      .withValues(alpha: 0.08),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                ),
+                                                child: const Text(
+                                                  'Primary',
+                                                  style: TextStyle(
+                                                    fontSize: 9,
+                                                    color: AppColors.forestGreen,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: const Text(
-                                'Primary',
+                              const SizedBox(height: 12),
+                              // Large Time Text
+                              Text(
+                                alarm.timeString,
                                 style: TextStyle(
-                                  fontSize: 10,
-                                  color: AppColors.forestGreen,
-                                  fontWeight: FontWeight.w700,
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.w900,
+                                  color: isEnabled
+                                      ? AppColors.textPrimary
+                                      : AppColors.textSubtle,
+                                  letterSpacing: -1.2,
+                                  height: 1.0,
                                 ),
                               ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        alarm.timeString,
-                        style: TextStyle(
-                          fontSize: 28,
-                          fontWeight: FontWeight.w800,
-                          color: alarm.isEnabled
-                              ? AppColors.textPrimary
-                              : AppColors.textSubtle,
-                          letterSpacing: -1,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Column(
-                  children: [
-                    Switch(
-                      value: alarm.isEnabled,
-                      onChanged: onToggle,
-                      activeThumbColor: AppColors.forestGreen,
-                    ),
-                    if (onDelete != null)
-                      GestureDetector(
-                        onTap: onDelete,
-                        child: const Padding(
-                          padding: EdgeInsets.only(top: 4),
-                          child: Icon(
-                            Icons.delete_outline_rounded,
-                            color: AppColors.absent,
-                            size: 20,
+                            ],
                           ),
                         ),
-                      ),
+                        // Right: Switch & Action Buttons
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Transform.scale(
+                              scale: 0.85,
+                              child: Switch(
+                                value: alarm.isEnabled,
+                                onChanged: onToggle,
+                                activeColor: Colors.white,
+                                activeTrackColor: AppColors.forestGreen,
+                                inactiveThumbColor: Colors.grey.shade400,
+                                inactiveTrackColor: Colors.grey.shade200,
+                              ),
+                            ),
+                            if (onDelete != null)
+                              IconButton(
+                                onPressed: onDelete,
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: AppColors.absent,
+                                  size: 20,
+                                ),
+                                constraints: const BoxConstraints(),
+                                padding: const EdgeInsets.only(top: 8, right: 8),
+                              ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // Divider
+                    Container(
+                      height: 1,
+                      color: Colors.grey.shade100,
+                    ),
+                    const SizedBox(height: 14),
+                    // Bottom Row: Details and Repeat Representation
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Repeat days row representation or Once label
+                        alarm.isRepeating
+                            ? _buildRepeatDaysRow(alarm.repeatDays, isEnabled)
+                            : Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade100,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_today_rounded,
+                                      size: 11,
+                                      color: isEnabled
+                                          ? AppColors.textSecondary
+                                          : AppColors.textSubtle,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Once',
+                                      style: TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w700,
+                                        color: isEnabled
+                                            ? AppColors.textSecondary
+                                            : AppColors.textSubtle,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                        // Category pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: alarm.isPrimary
+                                ? AppColors.forestGreen.withValues(alpha: 0.05)
+                                : Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            alarm.isPrimary ? 'Arrival Alarm' : 'Custom Alarm',
+                            style: TextStyle(
+                              fontSize: 10.5,
+                              fontWeight: FontWeight.w700,
+                              color: alarm.isPrimary
+                                  ? AppColors.forestGreen
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            // Details row
-            Row(
-              children: [
-                _detailChip(
-                  Icons.repeat_rounded,
-                  alarm.repeatLabel,
-                  alarm.isEnabled,
-                ),
-                const SizedBox(width: 8),
-                _detailChip(
-                  Icons.category_outlined,
-                  alarm.isPrimary ? 'Arrival Alarm' : 'Custom',
-                  alarm.isEnabled,
-                ),
-                if (!alarm.isEnabled) ...[
-                  const SizedBox(width: 8),
-                  _detailChip(
-                    Icons.pause_circle_outline_rounded,
-                    'Inactive',
-                    false,
-                    color: AppColors.absent,
-                  ),
-                ],
-              ],
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _detailChip(IconData icon, String label, bool isActive,
-      {Color? color}) {
-    final c = color ??
-        (isActive ? AppColors.textSecondary : AppColors.textSubtle);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: (color ?? AppColors.textSubtle).withValues(alpha: 0.06),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: c),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: c,
+  Widget _buildRepeatDaysRow(List<int> repeatDays, bool isEnabled) {
+    const days = [
+      (1, 'M'),
+      (2, 'T'),
+      (3, 'W'),
+      (4, 'T'),
+      (5, 'F'),
+      (6, 'S'),
+      (7, 'S'),
+    ];
+
+    return Row(
+      children: days.map((day) {
+        final isActiveDay = repeatDays.contains(day.$1);
+        return Container(
+          margin: const EdgeInsets.only(right: 4),
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: isActiveDay
+                ? (isEnabled
+                    ? AppColors.forestGreen.withValues(alpha: 0.1)
+                    : Colors.grey.shade200)
+                : Colors.transparent,
+            shape: BoxShape.circle,
+            border: Border.all(
+              color: isActiveDay
+                  ? (isEnabled ? AppColors.forestGreen.withValues(alpha: 0.2) : Colors.grey.shade300)
+                  : Colors.grey.shade100,
+              width: 1,
             ),
           ),
-        ],
-      ),
+          child: Center(
+            child: Text(
+              day.$2,
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                color: isActiveDay
+                    ? (isEnabled ? AppColors.forestGreen : AppColors.textSecondary)
+                    : AppColors.textSubtle,
+              ),
+            ),
+          ),
+        );
+      }).toList(),
     );
   }
 }
@@ -499,7 +601,7 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       padding: EdgeInsets.fromLTRB(
           24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 28),
@@ -511,11 +613,11 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
             // Handle bar
             Center(
               child: Container(
-                width: 44,
-                height: 4,
+                width: 40,
+                height: 5,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(2),
+                  color: Colors.grey.shade200,
+                  borderRadius: BorderRadius.circular(2.5),
                 ),
               ),
             ),
@@ -524,8 +626,9 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
               isEdit ? 'Edit Alarm' : 'New Alarm',
               style: const TextStyle(
                 fontWeight: FontWeight.w800,
-                fontSize: 20,
+                fontSize: 22,
                 color: AppColors.textPrimary,
+                letterSpacing: -0.5,
               ),
               textAlign: TextAlign.center,
             ),
@@ -535,24 +638,42 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
             GestureDetector(
               onTap: _pickTime,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 24),
+                padding: const EdgeInsets.symmetric(vertical: 20),
                 decoration: BoxDecoration(
                   color: AppColors.forestGreen.withValues(alpha: 0.05),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: AppColors.forestGreen.withValues(alpha: 0.15),
+                    width: 1.5,
                   ),
                 ),
-                child: Center(
-                  child: Text(
-                    _time.format(context),
-                    style: const TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.w800,
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.access_time_filled_rounded,
                       color: AppColors.forestGreen,
-                      letterSpacing: -2,
+                      size: 28,
                     ),
-                  ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _time.format(context),
+                      style: const TextStyle(
+                        fontSize: 48,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.forestGreen,
+                        letterSpacing: -2,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tap to change time',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -560,19 +681,38 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
 
             // Name field
             if (!isPrimary) ...[
-              const Text('Alarm Name',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                      fontSize: 14)),
+              const Text(
+                'Alarm Name',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                  fontSize: 14,
+                  letterSpacing: -0.2,
+                ),
+              ),
               const SizedBox(height: 8),
               Container(
-                decoration: softCard(radius: 14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: Colors.black.withValues(alpha: 0.06),
+                    width: 1.5,
+                  ),
+                ),
                 child: TextField(
                   controller: _nameCtrl,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                  ),
                   decoration: const InputDecoration(
                     hintText: 'e.g. Office Arrival, Break Time...',
-                    hintStyle: TextStyle(color: AppColors.textSubtle),
+                    hintStyle: TextStyle(
+                      color: AppColors.textSubtle,
+                      fontWeight: FontWeight.w500,
+                    ),
                     border: InputBorder.none,
                     contentPadding:
                         EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -584,23 +724,40 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
 
             // Repeat toggle
             Container(
-              decoration: softCard(radius: 14),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: Colors.black.withValues(alpha: 0.06),
+                  width: 1.5,
+                ),
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  const Icon(Icons.repeat_rounded,
-                      color: AppColors.forestGreen, size: 20),
+                  const Icon(
+                    Icons.repeat_rounded,
+                    color: AppColors.forestGreen,
+                    size: 22,
+                  ),
                   const SizedBox(width: 12),
                   const Expanded(
-                    child: Text('Repeat',
-                        style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600)),
+                    child: Text(
+                      'Repeat',
+                      style: TextStyle(
+                        color: AppColors.textPrimary,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
                   Switch(
                     value: _isRepeating,
                     onChanged: (v) => setState(() => _isRepeating = v),
-                    activeThumbColor: AppColors.forestGreen,
+                    activeColor: Colors.white,
+                    activeTrackColor: AppColors.forestGreen,
+                    inactiveThumbColor: Colors.grey.shade400,
+                    inactiveTrackColor: Colors.grey.shade200,
                   ),
                 ],
               ),
@@ -608,7 +765,7 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
 
             // Repeat day selector
             if (_isRepeating) ...[
-              const SizedBox(height: 16),
+              const SizedBox(height: 20),
               _buildDaySelector(),
             ],
 
@@ -624,7 +781,8 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(27)),
+                    borderRadius: BorderRadius.circular(27),
+                  ),
                 ),
                 child: _saving
                     ? const SizedBox(
@@ -638,7 +796,10 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
                     : Text(
                         isEdit ? 'Save Changes' : 'Create Alarm',
                         style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.w700),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.2,
+                        ),
                       ),
               ),
             ),
@@ -677,25 +838,33 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
           },
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
-            width: 42,
-            height: 42,
+            width: 44,
+            height: 44,
             decoration: BoxDecoration(
-              color:
-                  selected ? AppColors.forestGreen : AppColors.screenBg,
+              color: selected ? AppColors.forestGreen : Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
                 color: selected
                     ? AppColors.forestGreen
-                    : AppColors.shadowDark,
+                    : Colors.grey.shade200,
                 width: 1.5,
               ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: AppColors.forestGreen.withValues(alpha: 0.15),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ]
+                  : null,
             ),
             child: Center(
               child: Text(
                 day.$2,
                 style: TextStyle(
                   fontSize: 14,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: selected ? Colors.white : AppColors.textSecondary,
                 ),
               ),

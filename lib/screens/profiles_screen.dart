@@ -6,6 +6,8 @@ import 'package:home_widget/home_widget.dart';
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../widgets/widget_previews.dart';
+import '../services/update_service.dart';
+import '../widgets/update_dialog.dart';
 import 'profile_setup_screen.dart';
 import 'alarm_center_screen.dart';
 
@@ -20,6 +22,9 @@ class _ProfilesScreenState extends State<ProfilesScreen>
     with SingleTickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   late final AnimationController _animCtrl;
   final String _previewStatus = 'present';
+  bool _isWidgetsExpanded = false;
+  final UpdateService _updateService = UpdateService();
+  bool _isCheckingUpdate = false;
 
   @override
   bool get wantKeepAlive => true;
@@ -328,186 +333,297 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                   );
                 }),
 
-                // Widgets Section
+                // Expandable Widgets Section
                 const SizedBox(height: 16),
                 animatedItem(
                   profiles.length + 1,
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    decoration: softCard(radius: 20),
+                    clipBehavior: Clip.antiAlias,
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        dividerColor: Colors.transparent,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                      ),
+                      child: ExpansionTile(
+                        backgroundColor: Colors.white,
+                        collapsedBackgroundColor: Colors.white,
+                        title: const Text(
                           'Home Screen Widgets',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.w800,
                             color: AppColors.textPrimary,
                             letterSpacing: -0.4,
                           ),
                         ),
-                        SizedBox(height: 4),
-                        Text(
-                          'Preview your interactive widgets below, then pin them to your home screen.',
+                        subtitle: const Text(
+                          'Preview and pin widgets to your home screen',
                           style: TextStyle(
-                            fontSize: 12.5,
+                            fontSize: 12,
                             fontWeight: FontWeight.w500,
                             color: AppColors.textSecondary,
                           ),
                         ),
+                        leading: const Icon(
+                          Icons.widgets_rounded,
+                          color: AppColors.forestGreen,
+                          size: 24,
+                        ),
+                        trailing: Icon(
+                          _isWidgetsExpanded
+                              ? Icons.keyboard_arrow_up_rounded
+                              : Icons.keyboard_arrow_down_rounded,
+                          color: AppColors.textSecondary,
+                        ),
+                        onExpansionChanged: (expanded) {
+                          setState(() {
+                            _isWidgetsExpanded = expanded;
+                          });
+                        },
+                        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        children: [
+                          if (active == null)
+                            const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 16),
+                              child: Text(
+                                'Please select or add an active profile to view widget previews.',
+                                style: TextStyle(color: AppColors.textSecondary),
+                                textAlign: TextAlign.center,
+                              ),
+                            )
+                          else ...[
+                            const SizedBox(height: 12),
+                            _buildWidgetPreviewItem(
+                              index: profiles.length + 3,
+                              title: '1x1 Widget',
+                              subtitle: 'Quick Status Button',
+                              previewWidget: Center(
+                                child: SizedBox(
+                                  width: 115,
+                                  height: 115,
+                                  child: Widget1x1Preview(
+                                    status: _previewStatus,
+                                    time: '09:02 AM',
+                                  ),
+                                ),
+                              ),
+                              onPin: () => _pinWidget(
+                                name: 'WidgetProvider1x1',
+                                androidName: 'WidgetProvider1x1',
+                                qualifiedAndroidName:
+                                    'com.attendancetracker.attend.WidgetProvider1x1',
+                              ),
+                            ),
+                            _buildWidgetPreviewItem(
+                              index: profiles.length + 4,
+                              title: '2x1 Widget',
+                              subtitle: 'Status & Monthly Summary',
+                              previewWidget: Center(
+                                child: SizedBox(
+                                  width: 250,
+                                  child: Widget2x1Preview(
+                                    status: _previewStatus,
+                                    time: '09:02 AM',
+                                    dateStr: DateFormat('MMMM dd, yyyy').format(DateTime.now()),
+                                    scoreStr:
+                                        '${provider.stats(month: DateTime.now()).percentage.toStringAsFixed(1)}%',
+                                  ),
+                                ),
+                              ),
+                              onPin: () => _pinWidget(
+                                name: 'WidgetProvider2x1',
+                                androidName: 'WidgetProvider2x1',
+                                qualifiedAndroidName:
+                                    'com.attendancetracker.attend.WidgetProvider2x1',
+                              ),
+                            ),
+                            _buildWidgetPreviewItem(
+                              index: profiles.length + 5,
+                              title: '2x2 Widget',
+                              subtitle: 'Comprehensive Scoreboard',
+                              previewWidget: Center(
+                                child: SizedBox(
+                                  width: 200,
+                                  height: 200,
+                                  child: Widget2x2Preview(
+                                    name: active.name,
+                                    status: _previewStatus,
+                                    time: '09:02 AM',
+                                    presentCount: provider
+                                        .stats(month: DateTime.now())
+                                        .presentDays
+                                        .toString(),
+                                    halfDayCount: provider
+                                        .stats(month: DateTime.now())
+                                        .halfDays
+                                        .toString(),
+                                    absentCount: provider
+                                        .stats(month: DateTime.now())
+                                        .absentDays
+                                        .toString(),
+                                    scoreStr:
+                                        '${provider.stats(month: DateTime.now()).percentage.toStringAsFixed(1)}%',
+                                  ),
+                                ),
+                              ),
+                              onPin: () => _pinWidget(
+                                name: 'WidgetProvider2x2',
+                                androidName: 'WidgetProvider2x2',
+                                qualifiedAndroidName:
+                                    'com.attendancetracker.attend.WidgetProvider2x2',
+                              ),
+                            ),
+                            _buildWidgetPreviewItem(
+                              index: profiles.length + 6,
+                              title: '4x2 Widget',
+                              subtitle: 'Detailed Tracker & Salary Estimator',
+                              previewWidget: Widget4x2Preview(
+                                status: _previewStatus,
+                                time: '09:02 AM',
+                                monthYear: DateFormat('MMMM yyyy').format(DateTime.now()),
+                                presentCount: provider
+                                    .stats(month: DateTime.now())
+                                    .presentDays
+                                    .toString(),
+                                halfDayCount: provider
+                                    .stats(month: DateTime.now())
+                                    .halfDays
+                                    .toString(),
+                                absentCount: provider
+                                    .stats(month: DateTime.now())
+                                    .absentDays
+                                    .toString(),
+                                earnedSalary:
+                                    NumberFormat.currency(symbol: '₹', decimalDigits: 0)
+                                        .format(provider
+                                            .stats(month: DateTime.now())
+                                            .earnedSalary)
+                                        .trim(),
+                                estimatedSalary:
+                                    NumberFormat.currency(symbol: '₹', decimalDigits: 0)
+                                        .format(active.monthlySalary)
+                                        .trim(),
+                                progress: active.monthlySalary == 0
+                                    ? 0
+                                    : ((provider
+                                                    .stats(month: DateTime.now())
+                                                    .earnedSalary /
+                                                active.monthlySalary) *
+                                            100)
+                                        .round()
+                                        .clamp(0, 100),
+                              ),
+                              onPin: () => _pinWidget(
+                                name: 'WidgetProvider4x2',
+                                androidName: 'WidgetProvider4x2',
+                                qualifiedAndroidName:
+                                    'com.attendancetracker.attend.WidgetProvider4x2',
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Check for Updates section
+                animatedItem(
+                  profiles.length + 2,
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 24),
+                    padding: const EdgeInsets.all(18),
+                    decoration: softCard(radius: 20),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: AppColors.forestGreen.withValues(alpha: 0.08),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.system_update_rounded,
+                            color: AppColors.forestGreen,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'App Updates',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textPrimary,
+                                  letterSpacing: -0.3,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              const Text(
+                                'Check for the latest version of AttendX',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        _isCheckingUpdate
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  valueColor: AlwaysStoppedAnimation(AppColors.forestGreen),
+                                ),
+                              )
+                            : ElevatedButton(
+                                onPressed: () async {
+                                  setState(() => _isCheckingUpdate = true);
+                                  final info = await _updateService.checkForUpdate();
+                                  setState(() => _isCheckingUpdate = false);
+                                  if (!mounted) return;
+                                  if (info != null) {
+                                    UpdateDialog.show(context, info, _updateService);
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        behavior: SnackBarBehavior.floating,
+                                        content: Text('AttendX is up to date!'),
+                                      ),
+                                    );
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.forestGreen,
+                                  foregroundColor: Colors.white,
+                                  elevation: 0,
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'Check',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.bold),
+                                ),
+                              ),
                       ],
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
-
-                if (active == null)
-                  animatedItem(
-                    profiles.length + 3,
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Please select or add an active profile to view widget previews.',
-                          style: TextStyle(color: AppColors.textSecondary),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                  )
-                else ...[
-                  _buildWidgetPreviewItem(
-                    index: profiles.length + 3,
-                    title: '1x1 Widget',
-                    subtitle: 'Quick Status Button',
-                    previewWidget: Center(
-                      child: SizedBox(
-                        width: 115,
-                        height: 115,
-                        child: Widget1x1Preview(
-                          status: _previewStatus,
-                          time: '09:02 AM',
-                        ),
-                      ),
-                    ),
-                    onPin: () => _pinWidget(
-                      name: 'WidgetProvider1x1',
-                      androidName: 'WidgetProvider1x1',
-                      qualifiedAndroidName:
-                          'com.attendancetracker.attend.WidgetProvider1x1',
-                    ),
-                  ),
-                  _buildWidgetPreviewItem(
-                    index: profiles.length + 4,
-                    title: '2x1 Widget',
-                    subtitle: 'Status & Monthly Summary',
-                    previewWidget: Center(
-                      child: SizedBox(
-                        width: 250,
-                        child: Widget2x1Preview(
-                          status: _previewStatus,
-                          time: '09:02 AM',
-                          dateStr: DateFormat('MMMM dd, yyyy').format(DateTime.now()),
-                          scoreStr:
-                              '${provider.stats(month: DateTime.now()).percentage.toStringAsFixed(1)}%',
-                        ),
-                      ),
-                    ),
-                    onPin: () => _pinWidget(
-                      name: 'WidgetProvider2x1',
-                      androidName: 'WidgetProvider2x1',
-                      qualifiedAndroidName:
-                          'com.attendancetracker.attend.WidgetProvider2x1',
-                    ),
-                  ),
-                  _buildWidgetPreviewItem(
-                    index: profiles.length + 5,
-                    title: '2x2 Widget',
-                    subtitle: 'Comprehensive Scoreboard',
-                    previewWidget: Center(
-                      child: SizedBox(
-                        width: 200,
-                        height: 200,
-                        child: Widget2x2Preview(
-                          name: active.name,
-                          status: _previewStatus,
-                          time: '09:02 AM',
-                          presentCount: provider
-                              .stats(month: DateTime.now())
-                              .presentDays
-                              .toString(),
-                          halfDayCount: provider
-                              .stats(month: DateTime.now())
-                              .halfDays
-                              .toString(),
-                          absentCount: provider
-                              .stats(month: DateTime.now())
-                              .absentDays
-                              .toString(),
-                          scoreStr:
-                              '${provider.stats(month: DateTime.now()).percentage.toStringAsFixed(1)}%',
-                        ),
-                      ),
-                    ),
-                    onPin: () => _pinWidget(
-                      name: 'WidgetProvider2x2',
-                      androidName: 'WidgetProvider2x2',
-                      qualifiedAndroidName:
-                          'com.attendancetracker.attend.WidgetProvider2x2',
-                    ),
-                  ),
-                  _buildWidgetPreviewItem(
-                    index: profiles.length + 6,
-                    title: '4x2 Widget',
-                    subtitle: 'Detailed Tracker & Salary Estimator',
-                    previewWidget: Widget4x2Preview(
-                      status: _previewStatus,
-                      time: '09:02 AM',
-                      monthYear: DateFormat('MMMM yyyy').format(DateTime.now()),
-                      presentCount: provider
-                          .stats(month: DateTime.now())
-                          .presentDays
-                          .toString(),
-                      halfDayCount: provider
-                          .stats(month: DateTime.now())
-                          .halfDays
-                          .toString(),
-                      absentCount: provider
-                          .stats(month: DateTime.now())
-                          .absentDays
-                          .toString(),
-                      earnedSalary:
-                          NumberFormat.currency(symbol: '₹', decimalDigits: 0)
-                              .format(provider
-                                  .stats(month: DateTime.now())
-                                  .earnedSalary)
-                              .trim(),
-                      estimatedSalary:
-                          NumberFormat.currency(symbol: '₹', decimalDigits: 0)
-                              .format(active.monthlySalary)
-                              .trim(),
-                      progress: active.monthlySalary == 0
-                          ? 0
-                          : ((provider
-                                          .stats(month: DateTime.now())
-                                          .earnedSalary /
-                                      active.monthlySalary) *
-                                  100)
-                              .round()
-                              .clamp(0, 100),
-                    ),
-                    onPin: () => _pinWidget(
-                      name: 'WidgetProvider4x2',
-                      androidName: 'WidgetProvider4x2',
-                      qualifiedAndroidName:
-                          'com.attendancetracker.attend.WidgetProvider4x2',
-                    ),
-                  ),
-                ],
               ],
             ),
           ),

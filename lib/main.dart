@@ -8,10 +8,12 @@ import 'models/attendance_status.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_storage_service.dart';
+import 'services/update_service.dart';
 import 'providers/app_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/root_screen.dart';
 import 'screens/splash_screen.dart';
+import 'widgets/update_dialog.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -80,6 +82,7 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
   bool _showSplash = true;
   bool _pendingWidgetAction = false;
   StreamSubscription<Uri?>? _widgetSub;
+  final UpdateService _updateService = UpdateService();
 
   @override
   void initState() {
@@ -335,8 +338,15 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
       child: _showSplash
           ? SplashScreen(
               key: const ValueKey('splash'),
-              onDone: () {
+              onDone: () async {
                 setState(() => _showSplash = false);
+                
+                // Check for updates
+                final updateInfo = await _updateService.checkForUpdate();
+                if (updateInfo != null && context.mounted) {
+                  UpdateDialog.show(context, updateInfo, _updateService);
+                }
+
                 if (_pendingWidgetAction) {
                   _pendingWidgetAction = false;
                   Future.delayed(const Duration(milliseconds: 300), () {

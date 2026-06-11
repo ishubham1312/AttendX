@@ -205,7 +205,7 @@ class _DashboardScreenState extends State<DashboardScreen>
                         letterSpacing: -0.3),
                   ),
                   GestureDetector(
-                    onTap: () => _showMonthPicker(context, profile.startDate),
+                    onTap: () => _showMonthPicker(context),
                     child: Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
@@ -436,7 +436,7 @@ class _DashboardScreenState extends State<DashboardScreen>
     );
   }
 
-  void _showMonthPicker(BuildContext context, DateTime profileStartDate) {
+  void _showMonthPicker(BuildContext context) {
     final now = DateTime.now();
     final currentYear = now.year;
     final currentMonth = now.month;

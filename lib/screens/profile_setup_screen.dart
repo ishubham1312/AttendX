@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 
 import '../theme/app_theme.dart';
 import '../models/profile.dart';
@@ -19,7 +18,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   final _nameCtrl = TextEditingController();
   final _salaryCtrl = TextEditingController();
   String _role = 'Office';
-  DateTime _startDate = DateTime.now();
+  DateTime _startDate = DateTime(2015, 1, 1);
   TimeOfDay _reminder = const TimeOfDay(hour: 9, minute: 0);
   bool _sandwichLeaveEnabled = false;
 
@@ -142,21 +141,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
                 );
               }).toList(),
             ),
-            const SizedBox(height: 18),
-            _label('Start Date'),
-            _tappableTile(
-              icon: Icons.calendar_today_outlined,
-              text: DateFormat('MMM dd, yyyy').format(_startDate),
-              onTap: () async {
-                final d = await showDatePicker(
-                  context: context,
-                  initialDate: _startDate,
-                  firstDate: DateTime(2015),
-                  lastDate: DateTime.now().add(const Duration(days: 365)),
-                );
-                if (d != null) setState(() => _startDate = d);
-              },
-            ),
+
             const SizedBox(height: 18),
             _label('Daily Reminder Time'),
             _tappableTile(
