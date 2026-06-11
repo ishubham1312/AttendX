@@ -1,9 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/attendance_status.dart';
+import '../models/alarm_model.dart';
 import '../models/profile.dart';
 import '../services/storage_service.dart';
 import '../services/notification_service.dart';
+import '../services/alarm_storage_service.dart';
 import '../services/widget_service.dart';
 
 class AttendanceStats {
@@ -31,8 +33,9 @@ class AttendanceStats {
 class AppProvider extends ChangeNotifier {
   final StorageService storage;
   final NotificationService notifications;
+  final AlarmStorageService alarmStorage;
 
-  AppProvider(this.storage, this.notifications);
+  AppProvider(this.storage, this.notifications, this.alarmStorage);
 
   List<Profile> _profiles = [];
   String? _activeProfileId;
@@ -62,6 +65,19 @@ class AppProvider extends ChangeNotifier {
     // so they survive app kills, reboots, and updates.
     _rescheduleAllReminders();
     checkAndApplyPendingAttendance();
+    // Ensure primary alarms exist for all profiles
+    _ensurePrimaryAlarms();
+  }
+
+  void _ensurePrimaryAlarms() {
+    for (final p in _profiles) {
+      alarmStorage.ensurePrimaryAlarm(
+        profileId: p.id,
+        profileName: p.name,
+        hour: p.reminderHour,
+        minute: p.reminderMinute,
+      );
+    }
   }
 
   Future<void> checkAndApplyPendingAttendance() async {
@@ -139,6 +155,12 @@ class AppProvider extends ChangeNotifier {
   Future<void> updateProfile(Profile p) async {
     await storage.saveProfile(p);
     await _scheduleReminder(p);
+    // Sync primary alarm time when profile reminder changes
+    await alarmStorage.syncPrimaryAlarmWithProfile(
+      profileId: p.id,
+      hour: p.reminderHour,
+      minute: p.reminderMinute,
+    );
     load();
   }
 
@@ -413,5 +435,52 @@ class AppProvider extends ChangeNotifier {
       estimatedFullSalary: estimatedFull,
       deduction: deduction,
     );
+  }
+
+  // ---- Alarms ----
+  List<AlarmItem> getAlarms() => alarmStorage.getAlarms();
+
+  Future<void> saveAlarm(AlarmItem alarm) async {
+    await alarmStorage.saveAlarm(alarm);
+    // Schedule/update the alarm in the native scheduler
+    if (alarm.isEnabled) {
+      await notifications.scheduleDailyReminder(
+        id: alarm.id.hashCode,
+        profileId: alarm.linkedProfileId ?? activeProfile?.id ?? '',
+        profileName: alarm.name,
+        hour: alarm.hour,
+        minute: alarm.minute,
+      );
+    } else {
+      await notifications.cancel(alarm.id.hashCode);
+    }
+    notifyListeners();
+  }
+
+  Future<void> deleteAlarm(String alarmId) async {
+    final alarm = alarmStorage.getAlarm(alarmId);
+    if (alarm != null && alarm.isPrimary) return; // Cannot delete primary
+    await notifications.cancel(alarmId.hashCode);
+    await alarmStorage.deleteAlarm(alarmId);
+    notifyListeners();
+  }
+
+  Future<void> toggleAlarm(String alarmId, bool enabled) async {
+    final alarm = alarmStorage.getAlarm(alarmId);
+    if (alarm == null) return;
+    alarm.isEnabled = enabled;
+    await alarmStorage.saveAlarm(alarm);
+    if (enabled) {
+      await notifications.scheduleDailyReminder(
+        id: alarm.id.hashCode,
+        profileId: alarm.linkedProfileId ?? activeProfile?.id ?? '',
+        profileName: alarm.name,
+        hour: alarm.hour,
+        minute: alarm.minute,
+      );
+    } else {
+      await notifications.cancel(alarm.id.hashCode);
+    }
+    notifyListeners();
   }
 }

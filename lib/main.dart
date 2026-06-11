@@ -7,6 +7,7 @@ import 'theme/app_theme.dart';
 import 'models/attendance_status.dart';
 import 'services/storage_service.dart';
 import 'services/notification_service.dart';
+import 'services/alarm_storage_service.dart';
 import 'providers/app_provider.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/root_screen.dart';
@@ -18,11 +19,14 @@ Future<void> main() async {
   final storage = StorageService();
   await storage.init();
 
+  final alarmStorage = AlarmStorageService();
+  await alarmStorage.init();
+
   final notifications = NotificationService();
   await notifications.init();
   unawaited(notifications.requestPermissions());
 
-  final provider = AppProvider(storage, notifications)..load();
+  final provider = AppProvider(storage, notifications, alarmStorage)..load();
 
   notifications.onAction = (profileId, actionId) async {
     final today = DateTime.now();

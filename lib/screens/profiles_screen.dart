@@ -7,6 +7,7 @@ import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../widgets/widget_previews.dart';
 import 'profile_setup_screen.dart';
+import 'alarm_center_screen.dart';
 
 class ProfilesScreen extends StatefulWidget {
   const ProfilesScreen({super.key});
@@ -131,6 +132,28 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                     ),
                   ),
                   const Spacer(),
+                  // Alarm center button
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const AlarmCenterScreen(),
+                      ),
+                    ),
+                    child: Container(
+                      width: 44,
+                      height: 44,
+                      margin: const EdgeInsets.only(right: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.forestGreen.withValues(alpha: 0.08),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.notifications_active_outlined,
+                        color: AppColors.forestGreen,
+                        size: 22,
+                      ),
+                    ),
+                  ),
                   // Add profile button
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(
