@@ -11,6 +11,7 @@ import '../services/update_service.dart';
 import '../widgets/update_dialog.dart';
 import 'profile_setup_screen.dart';
 import 'alarm_center_screen.dart';
+import 'attendance_setup_wizard_screen.dart';
 
 class ProfilesScreen extends StatefulWidget {
   const ProfilesScreen({super.key});
@@ -27,7 +28,6 @@ class _ProfilesScreenState extends State<ProfilesScreen>
   final UpdateService _updateService = UpdateService();
   bool _isCheckingUpdate = false;
   String? _updateStatusText;
-  bool _showSimulationButton = false;
   String _currentVersion = '';
 
   @override
@@ -177,7 +177,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                   GestureDetector(
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => const ProfileSetupScreen(),
+                        builder: (_) => const AttendanceSetupWizardScreen(isFirst: false),
                       ),
                     ),
                     child: Container(
@@ -648,14 +648,11 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                                         _isCheckingUpdate = false;
                                         if (result.status == UpdateStatus.updateAvailable) {
                                           _updateStatusText = 'Update available: v${result.info!.latestVersion}';
-                                          _showSimulationButton = false;
                                           UpdateDialog.show(context, result.info!, _updateService);
                                         } else if (result.status == UpdateStatus.noUpdate) {
                                           _updateStatusText = 'AttendX is up to date!';
-                                          _showSimulationButton = false;
                                         } else {
                                           _updateStatusText = result.errorMessage ?? 'Update check failed.';
-                                          _showSimulationButton = true;
                                         }
                                       });
                                     },
@@ -677,52 +674,7 @@ class _ProfilesScreenState extends State<ProfilesScreen>
                                   ),
                           ],
                         ),
-                        if (_showSimulationButton) ...[
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8.0),
-                            child: Divider(height: 1, thickness: 0.5),
-                          ),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Expanded(
-                                child: Text(
-                                  'Want to test the Update Dialog UI anyway?',
-                                  style: TextStyle(
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppColors.textSecondary,
-                                  ),
-                                ),
-                              ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  final dummyInfo = UpdateInfo(
-                                    latestVersion: '2.3.0',
-                                    releaseNotes: '• Beautiful new update dialog with animated entry transitions.\n• Integrated url_launcher for seamless browser redirects.\n• Dynamic custom circular download percentage bar.\n• Refined premium widgets and settings layouts.',
-                                    apkUrl: 'https://github.com/ishubham1312/AttendX/releases/download/v2.3.0/app-release.apk',
-                                    releaseDate: '2026-06-11',
-                                  );
-                                  UpdateDialog.show(context, dummyInfo, _updateService);
-                                },
-                                icon: const Icon(Icons.play_circle_outline_rounded, size: 16, color: AppColors.forestGreen),
-                                label: const Text(
-                                  'Simulate Flow',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
-                                    color: AppColors.forestGreen,
-                                  ),
-                                ),
-                                style: TextButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                  minimumSize: Size.zero,
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+
                       ],
                     ),
                   ),

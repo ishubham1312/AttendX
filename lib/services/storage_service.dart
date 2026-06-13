@@ -8,18 +8,23 @@ import '../models/profile.dart';
 class StorageService {
   static const String profilesBoxName = 'profiles';
   static const String attendanceBoxName = 'attendance';
+  static const String metadataBoxName = 'attendance_metadata';
   static const String settingsBoxName = 'settings';
 
   late Box _profilesBox;
   late Box _attendanceBox;
+  late Box _metadataBox;
   late Box _settingsBox;
 
   Future<void> init() async {
     await Hive.initFlutter();
     _profilesBox = await Hive.openBox(profilesBoxName);
     _attendanceBox = await Hive.openBox(attendanceBoxName);
+    _metadataBox = await Hive.openBox(metadataBoxName);
     _settingsBox = await Hive.openBox(settingsBoxName);
   }
+
+  Box get settingsBox => _settingsBox;
 
   // ---- Settings ----
   bool get onboardingDone => _settingsBox.get('onboardingDone', defaultValue: false) as bool;
@@ -44,6 +49,9 @@ class StorageService {
     final keysToRemove =
         _attendanceBox.keys.where((k) => k.toString().startsWith('$id|')).toList();
     await _attendanceBox.deleteAll(keysToRemove);
+    final metadataKeysToRemove =
+        _metadataBox.keys.where((k) => k.toString().startsWith('$id|')).toList();
+    await _metadataBox.deleteAll(metadataKeysToRemove);
   }
 
   // ---- Attendance ----
@@ -62,6 +70,21 @@ class StorageService {
 
   Future<void> clearStatus(String profileId, DateTime date) {
     return _attendanceBox.delete(_key(profileId, date));
+  }
+
+  // ---- Attendance Metadata ----
+  Map<String, dynamic>? getAttendanceMetadata(String profileId, DateTime date) {
+    final raw = _metadataBox.get(_key(profileId, date));
+    if (raw == null) return null;
+    return Map<String, dynamic>.from(raw as Map);
+  }
+
+  Future<void> setAttendanceMetadata(String profileId, DateTime date, Map<String, dynamic> metadata) {
+    return _metadataBox.put(_key(profileId, date), metadata);
+  }
+
+  Future<void> clearAttendanceMetadata(String profileId, DateTime date) {
+    return _metadataBox.delete(_key(profileId, date));
   }
 
   /// Returns map of date -> raw storage string for a profile.

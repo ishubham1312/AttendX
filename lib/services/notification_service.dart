@@ -91,11 +91,8 @@ class NotificationService {
               AndroidFlutterLocalNotificationsPlugin>()
           ?.requestExactAlarmsPermission();
 
-      // 3. Battery optimization exemption — critical for OEM ROMs (MIUI, One UI, etc.)
-      final isBatteryExempt = await isBatteryOptimizationDisabled();
-      if (!isBatteryExempt) {
-        await requestDisableBatteryOptimization();
-      }
+      // Background execution is handled by smart platform behavior.
+      // Avoid forcing a battery optimization exemption prompt.
     } catch (e) {
       if (kDebugMode) debugPrint('Permission request failed: $e');
     }
@@ -226,6 +223,41 @@ class NotificationService {
     }
   }
 
+  Future<void> showNotification({
+    required int id,
+    required String title,
+    required String body,
+    String? payload,
+    List<AndroidNotificationAction>? actions,
+  }) async {
+    if (kIsWeb) {
+      debugPrint('Web Notification: $title - $body');
+      return;
+    }
+    if (!_ready) return;
+    try {
+      await _plugin.show(
+        id,
+        title,
+        body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            channelId,
+            'Attendance Reminder',
+            channelDescription: 'Daily attendance reminder',
+            importance: Importance.max,
+            priority: Priority.high,
+            actions: actions,
+          ),
+          iOS: const DarwinNotificationDetails(),
+        ),
+        payload: payload,
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('showNotification failed: $e');
+    }
+  }
+
   Future<void> cancel(int id) async {
     if (kIsWeb) return;
     try {
@@ -239,15 +271,5 @@ class NotificationService {
     try {
       if (_ready) await _plugin.cancelAll();
     } catch (_) {}
-  }
-
-  tz.TZDateTime _nextInstanceOf(int hour, int minute) {
-    final now = tz.TZDateTime.now(tz.local);
-    var scheduled =
-        tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
-    if (scheduled.isBefore(now)) {
-      scheduled = scheduled.add(const Duration(days: 1));
-    }
-    return scheduled;
   }
 }

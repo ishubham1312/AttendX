@@ -7,6 +7,8 @@ import '../services/storage_service.dart';
 import '../services/notification_service.dart';
 import '../services/alarm_storage_service.dart';
 import '../services/widget_service.dart';
+import '../services/gps_attendance_service.dart';
+import '../services/motivational_notification_service.dart';
 
 class AttendanceStats {
   final int presentDays;
@@ -17,6 +19,9 @@ class AttendanceStats {
   final double earnedSalary;
   final double estimatedFullSalary;
   final double deduction;
+  final double payableDays;
+  final double paidHolidays;
+  final double deductedHolidays;
 
   AttendanceStats({
     required this.presentDays,
@@ -27,6 +32,9 @@ class AttendanceStats {
     required this.earnedSalary,
     required this.estimatedFullSalary,
     required this.deduction,
+    required this.payableDays,
+    required this.paidHolidays,
+    required this.deductedHolidays,
   });
 }
 
@@ -34,8 +42,16 @@ class AppProvider extends ChangeNotifier {
   final StorageService storage;
   final NotificationService notifications;
   final AlarmStorageService alarmStorage;
+  late final GPSAttendanceService gpsAttendance;
+  late final MotivationalNotificationService motivationalNotifications;
 
-  AppProvider(this.storage, this.notifications, this.alarmStorage);
+  AppProvider(this.storage, this.notifications, this.alarmStorage) {
+    gpsAttendance = GPSAttendanceService(storage, notifications);
+    gpsAttendance.addListener(() {
+      notifyListeners();
+    });
+    motivationalNotifications = MotivationalNotificationService(storage, notifications);
+  }
 
   List<Profile> _profiles = [];
   String? _activeProfileId;
@@ -59,6 +75,13 @@ class AppProvider extends ChangeNotifier {
     _profiles = storage.getProfiles();
     _activeProfileId = storage.activeProfileId ??
         (_profiles.isNotEmpty ? _profiles.first.id : null);
+    
+    if (_activeProfileId != null) {
+      gpsAttendance.init(_activeProfileId!);
+    } else {
+      gpsAttendance.stopTracking();
+    }
+
     notifyListeners();
     WidgetService.updateWidgets(this);
     // Re-schedule notifications for all profiles on every app launch
@@ -176,6 +199,7 @@ class AppProvider extends ChangeNotifier {
   Future<void> setActiveProfile(String id) async {
     _activeProfileId = id;
     await storage.setActiveProfileId(id);
+    await gpsAttendance.init(id);
     notifyListeners();
     WidgetService.updateWidgets(this);
   }
@@ -245,14 +269,32 @@ class AppProvider extends ChangeNotifier {
     final entry = AttendanceEntry(
         status, status == AttendanceStatus.halfDay ? (half ?? HalfType.firstHalf) : null);
     await storage.setStatusRaw(p.id, date, entry.toStorage());
+
+    // Stop/cancel reminders for that day once Present is marked
+    if (status == AttendanceStatus.present) {
+      notifications.cancel(p.id.hashCode);
+    }
+
+    // Update active geofence/tracking service state
+    gpsAttendance.updateTrackingState();
+
     notifyListeners();
     WidgetService.updateWidgets(this);
+
+    // Trigger motivational engine check
+    Future.delayed(const Duration(seconds: 1), () {
+      motivationalNotifications.checkAndTrigger(p);
+    });
   }
 
   Future<void> clear(DateTime date) async {
     final p = activeProfile;
     if (p == null) return;
     await storage.clearStatus(p.id, date);
+
+    // Update active geofence/tracking service state
+    gpsAttendance.updateTrackingState();
+
     notifyListeners();
     WidgetService.updateWidgets(this);
   }
@@ -284,26 +326,11 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-  /// Count weekdays (Mon-Fri) in a given month up to [until] (inclusive).
-  int _weekdaysInMonth(DateTime month, {DateTime? until}) {
-    final firstDay = DateTime(month.year, month.month, 1);
-    final lastDay = DateTime(month.year, month.month + 1, 0);
-    final end = until != null && until.isBefore(lastDay) ? until : lastDay;
-    int count = 0;
-    var d = firstDay;
-    while (!d.isAfter(end)) {
-      if (d.weekday != DateTime.saturday && d.weekday != DateTime.sunday) {
-        count++;
-      }
-      d = d.add(const Duration(days: 1));
-    }
-    return count;
-  }
 
   bool isSandwichLeave(String profileId, DateTime date, Map<DateTime, AttendanceEntry> records) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
-    // 1. Search backward for the nearest non-holiday marked status
+    // Search backward for the nearest non-holiday status (could be marked or virtual non-holiday)
     DateTime prevDate = normalizedDate.subtract(const Duration(days: 1));
     AttendanceStatus? prevStatus;
     for (int i = 0; i < 30; i++) {
@@ -314,32 +341,14 @@ class AppProvider extends ChangeNotifier {
           break;
         }
       } else {
-        break; // stop on unmarked
+        // If there's no entry, it's a regular weekday that is unmarked.
+        // Unmarked weekdays are not holidays. We treat unmarked as not a holiday, so we stop searching.
+        break;
       }
       prevDate = prevDate.subtract(const Duration(days: 1));
     }
 
-    if (prevStatus != AttendanceStatus.absent) {
-      return false;
-    }
-
-    // 2. Search forward for the nearest non-holiday marked status
-    DateTime nextDate = normalizedDate.add(const Duration(days: 1));
-    AttendanceStatus? nextStatus;
-    for (int i = 0; i < 30; i++) {
-      final entry = records[nextDate];
-      if (entry != null) {
-        if (entry.status != AttendanceStatus.holiday) {
-          nextStatus = entry.status;
-          break;
-        }
-      } else {
-        break; // stop on unmarked
-      }
-      nextDate = nextDate.add(const Duration(days: 1));
-    }
-
-    return nextStatus == AttendanceStatus.absent;
+    return prevStatus == AttendanceStatus.absent;
   }
 
   AttendanceStatus? effectiveStatusFor(DateTime date) {
@@ -371,66 +380,171 @@ class AppProvider extends ChangeNotifier {
         earnedSalary: 0,
         estimatedFullSalary: 0,
         deduction: 0,
+        payableDays: 0,
+        paidHolidays: 0,
+        deductedHolidays: 0,
       );
     }
+
     final records = recordsFor(p.id);
-    int present = 0, absent = 0, half = 0;
-    records.forEach((date, entry) {
-      if (month != null &&
-          (date.year != month.year || date.month != month.month)) {
-        return;
+
+    if (month != null) {
+      final int daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+      final perDay = p.monthlySalary / daysInMonth;
+
+      final manualRecords = storage.getAllForProfile(p.id);
+      final manualDatesInMonth = manualRecords.keys.where((date) =>
+          date.year == month.year && date.month == month.month).toList();
+
+      if (manualDatesInMonth.isEmpty) {
+        return AttendanceStats(
+          presentDays: 0,
+          absentDays: 0,
+          halfDays: 0,
+          totalMarked: 0,
+          percentage: 0,
+          earnedSalary: 0,
+          estimatedFullSalary: p.monthlySalary,
+          deduction: 0,
+          payableDays: 0,
+          paidHolidays: 0,
+          deductedHolidays: 0,
+        );
       }
 
-      var effectiveStatus = entry.status;
-      if (effectiveStatus == AttendanceStatus.holiday) {
-        final today = DateTime.now();
-        final todayMidnight = DateTime(today.year, today.month, today.day);
-        if (date.isAfter(todayMidnight)) {
-          return;
+      final endDay = manualDatesInMonth.map((d) => d.day).reduce((a, b) => a > b ? a : b);
+      DateTime monthStart = DateTime(month.year, month.month, 1);
+      final pStart = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+      if (pStart.isAfter(monthStart) && pStart.year == month.year && pStart.month == month.month) {
+        monthStart = pStart;
+      }
+
+      int present = 0;
+      int absent = 0;
+      int half = 0;
+      double paidHolidays = 0.0;
+      double deductedHolidays = 0.0;
+
+      for (int day = monthStart.day; day <= endDay; day++) {
+        final date = DateTime(month.year, month.month, day);
+        final entry = entryFor(date);
+        if (entry == null) {
+          continue; // Unmarked weekdays are skipped
         }
-        if (p.sandwichLeaveEnabled && isSandwichLeave(p.id, date, records)) {
-          effectiveStatus = AttendanceStatus.absent;
+
+        var effectiveStatus = entry.status;
+        if (effectiveStatus == AttendanceStatus.holiday) {
+          if (p.sandwichLeaveEnabled && isSandwichLeave(p.id, date, records)) {
+            effectiveStatus = AttendanceStatus.absent;
+          }
+        }
+
+        switch (effectiveStatus) {
+          case AttendanceStatus.present:
+            present++;
+            break;
+          case AttendanceStatus.absent:
+            if (entry.status == AttendanceStatus.holiday) {
+              deductedHolidays++;
+            } else {
+              absent++;
+            }
+            break;
+          case AttendanceStatus.halfDay:
+            half++;
+            break;
+          case AttendanceStatus.holiday:
+            paidHolidays++;
+            break;
         }
       }
 
-      switch (effectiveStatus) {
-        case AttendanceStatus.present:
-        case AttendanceStatus.holiday:
-          present++;
-          break;
-        case AttendanceStatus.absent:
-          absent++;
-          break;
-        case AttendanceStatus.halfDay:
-          half++;
-          break;
+      final payableDays = present + half * 0.5 + paidHolidays;
+      final earned = perDay * payableDays;
+      final deduction = perDay * (absent + half * 0.5 + deductedHolidays);
+      final totalConsidered = present + absent + half;
+      final percentage = totalConsidered == 0
+          ? 0.0
+          : ((present + half * 0.5) / totalConsidered) * 100;
+
+      return AttendanceStats(
+        presentDays: present,
+        absentDays: absent,
+        halfDays: half,
+        totalMarked: totalConsidered,
+        percentage: percentage,
+        earnedSalary: earned,
+        estimatedFullSalary: p.monthlySalary,
+        deduction: deduction,
+        payableDays: payableDays,
+        paidHolidays: paidHolidays,
+        deductedHolidays: deductedHolidays,
+      );
+    } else {
+      // Overall calculation (sum over all months with marked records)
+      final manualRecords = storage.getAllForProfile(p.id);
+      if (manualRecords.isEmpty) {
+        return AttendanceStats(
+          presentDays: 0,
+          absentDays: 0,
+          halfDays: 0,
+          totalMarked: 0,
+          percentage: 0,
+          earnedSalary: 0,
+          estimatedFullSalary: 0,
+          deduction: 0,
+          payableDays: 0,
+          paidHolidays: 0,
+          deductedHolidays: 0,
+        );
       }
-    });
 
-    final effectiveDays = present + half * 0.5;
-    final totalConsidered = present + absent + half;
-    final percentage =
-        totalConsidered == 0 ? 0.0 : (effectiveDays / totalConsidered) * 100;
+      final monthsList = manualRecords.keys
+          .map((d) => DateTime(d.year, d.month))
+          .toSet()
+          .toList();
 
-    // Fixed 30-day month for simple per-day salary calculation.
-    // e.g. ₹30,000/month → ₹1,000/day
-    const int daysInMonth = 30;
-    final perDay = p.monthlySalary / daysInMonth;
+      int totalPresent = 0;
+      int totalAbsent = 0;
+      int totalHalf = 0;
+      int totalMarked = 0;
+      double totalEarned = 0;
+      double totalDeduction = 0;
+      double totalPayableDays = 0;
+      double totalPaidHolidays = 0;
+      double totalDeductedHolidays = 0;
 
-    final earned = perDay * effectiveDays;
-    final estimatedFull = p.monthlySalary;
-    final deduction = perDay * (absent + half * 0.5);
+      for (final m in monthsList) {
+        final mStats = stats(month: m);
+        totalPresent += mStats.presentDays;
+        totalAbsent += mStats.absentDays;
+        totalHalf += mStats.halfDays;
+        totalMarked += mStats.totalMarked;
+        totalEarned += mStats.earnedSalary;
+        totalDeduction += mStats.deduction;
+        totalPayableDays += mStats.payableDays;
+        totalPaidHolidays += mStats.paidHolidays;
+        totalDeductedHolidays += mStats.deductedHolidays;
+      }
 
-    return AttendanceStats(
-      presentDays: present,
-      absentDays: absent,
-      halfDays: half,
-      totalMarked: totalConsidered,
-      percentage: percentage,
-      earnedSalary: earned,
-      estimatedFullSalary: estimatedFull,
-      deduction: deduction,
-    );
+      final percentage = totalMarked == 0
+          ? 0.0
+          : ((totalPresent + totalHalf * 0.5) / totalMarked) * 100;
+
+      return AttendanceStats(
+        presentDays: totalPresent,
+        absentDays: totalAbsent,
+        halfDays: totalHalf,
+        totalMarked: totalMarked,
+        percentage: percentage,
+        earnedSalary: totalEarned,
+        estimatedFullSalary: p.monthlySalary * monthsList.length,
+        deduction: totalDeduction,
+        payableDays: totalPayableDays,
+        paidHolidays: totalPaidHolidays,
+        deductedHolidays: totalDeductedHolidays,
+      );
+    }
   }
 
   // ---- Alarms ----

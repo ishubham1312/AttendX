@@ -106,14 +106,19 @@ class _AnimatedBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double barHorizontalMargin = 48; // Adjusted margin for a modern, flowy pill width
+    const double barHorizontalMargin =
+        48; // Adjusted margin for a modern, flowy pill width
     const double innerPadding = 8;
     const double circleSize = 48;
 
     return SafeArea(
       child: Container(
         margin: const EdgeInsets.fromLTRB(
-            barHorizontalMargin, 0, barHorizontalMargin, 20),
+          barHorizontalMargin,
+          0,
+          barHorizontalMargin,
+          20,
+        ),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(34),
           boxShadow: [
@@ -130,12 +135,18 @@ class _AnimatedBottomNav extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
             child: Container(
               padding: const EdgeInsets.symmetric(
-                  horizontal: innerPadding, vertical: 8),
+                horizontal: innerPadding,
+                vertical: 8,
+              ),
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+                color: Theme.of(
+                  context,
+                ).colorScheme.surface.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(34),
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.6),
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.surface.withValues(alpha: 0.6),
                   width: 1.5,
                 ),
               ),
@@ -165,7 +176,9 @@ class _AnimatedBottomNav extends StatelessWidget {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.forestGreen.withValues(alpha: 0.35),
+                                  color: AppColors.forestGreen.withValues(
+                                    alpha: 0.35,
+                                  ),
                                   blurRadius: 10,
                                   offset: const Offset(0, 4),
                                 ),
@@ -184,13 +197,20 @@ class _AnimatedBottomNav extends StatelessWidget {
                                 child: Center(
                                   child: TweenAnimationBuilder<double>(
                                     tween: Tween(
-                                        begin: 1, end: active ? 1.1 : 0.9),
+                                      begin: 1,
+                                      end: active ? 1.1 : 0.9,
+                                    ),
                                     duration: const Duration(milliseconds: 180),
                                     curve: Curves.easeOutCubic,
                                     builder: (_, scale, child) =>
-                                        Transform.scale(scale: scale, child: child),
+                                        Transform.scale(
+                                          scale: scale,
+                                          child: child,
+                                        ),
                                     child: AnimatedSwitcher(
-                                      duration: const Duration(milliseconds: 150),
+                                      duration: const Duration(
+                                        milliseconds: 150,
+                                      ),
                                       child: Icon(
                                         icons[i],
                                         key: ValueKey('$i-$active'),

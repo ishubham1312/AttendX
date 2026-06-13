@@ -47,6 +47,7 @@ class _MarkSheetState extends State<MarkSheet> with SingleTickerProviderStateMix
   Widget build(BuildContext context) {
     final provider = context.read<AppProvider>();
     final current = widget.current;
+    final metadata = provider.storage.getAttendanceMetadata(provider.activeProfile!.id, widget.date);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
@@ -124,6 +125,38 @@ class _MarkSheetState extends State<MarkSheet> with SingleTickerProviderStateMix
               active: current?.status == AttendanceStatus.holiday,
               onTap: () => _mark(AttendanceStatus.holiday),
             ),
+          if (metadata != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.forestGreen.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.forestGreen.withValues(alpha: 0.12)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Row(
+                    children: [
+                      Icon(Icons.verified_outlined, color: AppColors.forestGreen, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'GPS Auto-Verification Details',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.forestGreen),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  _buildDetailRow('Status', metadata['status'] ?? 'Verified'),
+                  _buildDetailRow('Workplace', metadata['locationName'] ?? 'Office'),
+                  _buildDetailRow('Time Registered', metadata['arrivalTime'] ?? 'N/A'),
+                  _buildDetailRow('Coordinates', '${metadata['latitude']?.toStringAsFixed(5)}, ${metadata['longitude']?.toStringAsFixed(5)}'),
+                  _buildDetailRow('Accuracy Radius', '${metadata['accuracy']?.toStringAsFixed(1) ?? '10'}m'),
+                ],
+              ),
+            ),
+          ],
           if (current != null)
             TextButton(
               onPressed: () {
@@ -133,6 +166,19 @@ class _MarkSheetState extends State<MarkSheet> with SingleTickerProviderStateMix
               child: const Text('Clear mark',
                   style: TextStyle(color: AppColors.textSecondary)),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.5),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+          Text(value, style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
         ],
       ),
     );

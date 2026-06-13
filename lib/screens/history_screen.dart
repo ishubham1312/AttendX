@@ -445,7 +445,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     for (int i = 0; i < 7; i++) {
       final date = weekStart.add(Duration(days: i));
       final s = provider.effectiveStatusFor(date);
-      if (s == AttendanceStatus.present || s == AttendanceStatus.holiday) present++;
+      if (s == AttendanceStatus.present) present++;
       if (s == AttendanceStatus.halfDay) half++;
       if (s == AttendanceStatus.absent) absent++;
     }
@@ -487,7 +487,7 @@ class _HistoryScreenState extends State<HistoryScreen>
     final isSunday = date.weekday == DateTime.sunday;
     final isManuallyMarked = provider.isManuallyMarked(date);
     final entry = (isSunday && !isManuallyMarked) ? null : provider.entryFor(date);
-    final status = entry?.status;
+    final status = provider.effectiveStatusFor(date);
     final isSelected = _isSameDay(date, _selected);
     final isFuture = date.isAfter(DateTime.now());
     final isToday = _isSameDay(date, DateTime.now());
@@ -615,24 +615,28 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 
   Color _bgFor(AttendanceStatus? s, bool selected, DateTime date, AppProvider provider) {
+    if (s == AttendanceStatus.absent) {
+      return AppColors.absent;
+    }
     if (date.weekday == DateTime.sunday && !provider.isManuallyMarked(date)) {
       return selected ? Colors.white : Colors.transparent;
     }
     switch (s) {
       case AttendanceStatus.present:
         return AppColors.present;
-      case AttendanceStatus.absent:
-        return AppColors.absent;
       case AttendanceStatus.halfDay:
         return AppColors.halfDay;
       case AttendanceStatus.holiday:
         return AppColors.holiday;
-      case null:
+      default:
         return selected ? Colors.white : Colors.transparent;
     }
   }
 
   Color _textFor(AttendanceStatus? s, bool future, DateTime date, AppProvider provider) {
+    if (s == AttendanceStatus.absent) {
+      return future ? Colors.white.withValues(alpha: 0.35) : Colors.white;
+    }
     if (date.weekday == DateTime.sunday && !provider.isManuallyMarked(date)) {
       if (future) return Colors.red.withValues(alpha: 0.35);
       return Colors.red;

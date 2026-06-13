@@ -3,7 +3,9 @@ import 'package:provider/provider.dart';
 
 import '../theme/app_theme.dart';
 import '../models/profile.dart';
+import '../models/attendance_location.dart';
 import '../providers/app_provider.dart';
+import 'location_setup_screen.dart';
 
 class ProfileSetupScreen extends StatefulWidget {
   final bool isFirst;
@@ -21,6 +23,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
   DateTime _startDate = DateTime(2015, 1, 1);
   TimeOfDay _reminder = const TimeOfDay(hour: 9, minute: 0);
   bool _sandwichLeaveEnabled = false;
+  List<AttendanceLocation> _locations = [];
 
   final _roles = const ['Office', 'College', 'School'];
 
@@ -30,11 +33,12 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
     final e = widget.existing;
     if (e != null) {
       _nameCtrl.text = e.name;
-      _salaryCtrl.text = e.monthlySalary > 0 ? e.monthlySalary.toString() : '';
+      _salaryCtrl.text = e.monthlySalary > 0 ? e.monthlySalary.toStringAsFixed(0) : '';
       _role = e.role;
       _startDate = e.startDate;
       _reminder = TimeOfDay(hour: e.reminderHour, minute: e.reminderMinute);
       _sandwichLeaveEnabled = e.sandwichLeaveEnabled;
+      _locations = List.from(e.locations);
     }
   }
 
@@ -64,6 +68,7 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       reminderMinute: _reminder.minute,
       monthlySalary: double.tryParse(_salaryCtrl.text.trim()) ?? 0,
       sandwichLeaveEnabled: _sandwichLeaveEnabled,
+      locations: _locations,
     );
 
     if (widget.existing != null) {
@@ -81,6 +86,41 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
       }
     } else {
       Navigator.of(context).pop();
+    }
+  }
+
+  void _openLocationSetup(AttendanceLocation? existing) async {
+    final tempProfile = Profile(
+      id: widget.existing?.id ?? 'temp_edit_profile',
+      name: _nameCtrl.text.trim().isEmpty ? 'Me' : _nameCtrl.text.trim(),
+      role: _role,
+      startDate: _startDate,
+      locations: _locations,
+    );
+
+    final result = await Navigator.push<AttendanceLocation>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationSetupScreen(
+          profile: tempProfile,
+          existing: existing,
+          autoNameFromType: _role,
+          onSaved: (loc) => Navigator.pop(context, loc),
+        ),
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        if (existing != null) {
+          final idx = _locations.indexWhere((l) => l.id == existing.id);
+          if (idx != -1) {
+            _locations[idx] = result;
+          }
+        } else {
+          _locations.add(result);
+        }
+      });
     }
   }
 
@@ -143,7 +183,54 @@ class _ProfileSetupScreenState extends State<ProfileSetupScreen> {
             ),
 
             const SizedBox(height: 18),
-            _label('Daily Reminder Time'),
+            _label('Attendance Locations'),
+            if (_locations.isEmpty) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: softCard(radius: 14),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_off_rounded, color: AppColors.textSubtle),
+                    const SizedBox(width: 12),
+                    const Text('No locations configured', style: TextStyle(color: AppColors.textSecondary)),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () => _openLocationSetup(null),
+                      child: const Text('Add', style: TextStyle(color: AppColors.forestGreen, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              ..._locations.map((loc) => Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                decoration: softCard(radius: 14),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  leading: const Icon(Icons.location_on_rounded, color: AppColors.forestGreen),
+                  title: Text(loc.name, style: const TextStyle(fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                  subtitle: Text(
+                    loc.address.isNotEmpty ? loc.address : 'Lat: ${loc.latitude.toStringAsFixed(4)}, Lng: ${loc.longitude.toStringAsFixed(4)}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSubtle),
+                  ),
+                  trailing: const Icon(Icons.edit_location_alt_rounded, color: AppColors.textSubtle),
+                  onTap: () => _openLocationSetup(loc),
+                ),
+              )),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () => _openLocationSetup(null),
+                  icon: const Icon(Icons.add_location_alt_rounded, size: 16, color: AppColors.forestGreen),
+                  label: const Text('Add Another Location', style: TextStyle(color: AppColors.forestGreen, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+
+            const SizedBox(height: 18),
+            _label('Daily Arrival Time'),
             _tappableTile(
               icon: Icons.notifications_active_outlined,
               text: _reminder.format(context),

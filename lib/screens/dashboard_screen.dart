@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../widgets/progress_bar.dart';
 import '../widgets/animated_count.dart';
+import '../services/gps_attendance_service.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -21,7 +23,116 @@ class _DashboardScreenState extends State<DashboardScreen>
   late final AnimationController _staggerCtrl;
   bool _isSalaryExpanded = false;
   DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month);
+  final bool _hasShownBackgroundReminder = false;
 
+  Widget _buildGPSBanner(GPSAttendanceService gps) {
+    if (gps.gpsStatus == 'Active' || gps.gpsStatus == 'BackgroundMissing')
+      return const SizedBox.shrink();
+
+    Color bgColor = Colors.blue.shade50;
+    Color textColor = Colors.blue.shade900;
+    IconData icon = Icons.info_outline;
+    String title = '';
+    String body = '';
+    String buttonText = '';
+    VoidCallback? onPressed;
+
+    if (gps.gpsStatus == 'Disabled') {
+      bgColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      icon = Icons.location_off_outlined;
+      title = 'Location Services Disabled';
+      body =
+          'Location services are disabled. Attendance cannot be verified automatically.';
+      buttonText = 'Enable GPS';
+      onPressed = () => Geolocator.openLocationSettings();
+    } else if (gps.gpsStatus == 'PermissionMissing') {
+      bgColor = Colors.red.shade50;
+      textColor = Colors.red.shade900;
+      icon = Icons.security_outlined;
+      title = 'Location Permission Missing';
+      body =
+          'Location access is required to automatically verify and mark your attendance.';
+      buttonText = 'Grant Permission';
+      onPressed = () async {
+        final granted = await gps.requestLocationPermission();
+        if (!granted) {
+          await Geolocator.openAppSettings();
+        }
+      };
+    } else if (gps.gpsStatus == 'BackgroundMissing') {
+      bgColor = Colors.orange.shade50;
+      textColor = Colors.orange.shade900;
+      icon = Icons.location_history_outlined;
+      title = 'Set Location to "Allow all the time"';
+      body =
+          'Please choose "Allow all the time" in location settings. If set to "While using the app", the app won\'t be able to mark your attendance automatically.';
+      buttonText = 'Open Settings';
+      onPressed = () => Geolocator.openAppSettings();
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: textColor.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: textColor, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                    fontSize: 14,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.8),
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 36,
+            child: ElevatedButton(
+              onPressed: onPressed,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: textColor,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: Text(
+                buttonText,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   bool get wantKeepAlive => true;
@@ -46,6 +157,42 @@ class _DashboardScreenState extends State<DashboardScreen>
     return f.format(v).trim();
   }
 
+  void _showBackgroundLocationReminderDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text(
+          'Set Location to "Allow all the time"',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        content: const Text(
+          'Please choose "Allow all the time" in location settings. If set to "While using the app", the app won\'t be able to mark your attendance automatically.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Geolocator.openAppSettings();
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.forestGreen,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Open Settings'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -54,8 +201,6 @@ class _DashboardScreenState extends State<DashboardScreen>
     final monthStats = provider.stats(month: _selectedMonth);
     final overall = provider.stats();
     final hasSalary = profile.monthlySalary > 0;
-
-
 
     if (_animate == null) {
       _animate = !provider.dashboardStatsPlayed;
@@ -98,12 +243,15 @@ class _DashboardScreenState extends State<DashboardScreen>
               const Center(
                 child: Column(
                   children: [
-                    Text('Dashboard',
-                        style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary,
-                            letterSpacing: -0.5)),
+                    Text(
+                      'Dashboard',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textPrimary,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
                     SizedBox(height: 4),
                   ],
                 ),
@@ -113,7 +261,10 @@ class _DashboardScreenState extends State<DashboardScreen>
               0,
               Center(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.forestGreen.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
@@ -121,9 +272,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                   child: Text(
                     '${profile.name} · ${profile.role}',
                     style: const TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.forestGreen),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.forestGreen,
+                    ),
                   ),
                 ),
               ),
@@ -154,12 +306,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            DateFormat('MMMM yyyy').format(_selectedMonth).toUpperCase(),
+                            DateFormat(
+                              'MMMM yyyy',
+                            ).format(_selectedMonth).toUpperCase(),
                             style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.75),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1),
+                              color: Colors.white.withValues(alpha: 0.75),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           AnimatedCount(
@@ -168,22 +323,28 @@ class _DashboardScreenState extends State<DashboardScreen>
                             decimals: 1,
                             suffix: '%',
                             style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 42,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -1),
+                              color: Colors.white,
+                              fontSize: 42,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -1,
+                            ),
                           ),
                           const SizedBox(height: 2),
-                          const Text('Attendance Score',
-                              style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w500)),
+                          const Text(
+                            'Attendance Score',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     _PercentRing(
-                        percent: monthStats.percentage, animate: animate),
+                      percent: monthStats.percentage,
+                      animate: animate,
+                    ),
                   ],
                 ),
               ),
@@ -199,10 +360,11 @@ class _DashboardScreenState extends State<DashboardScreen>
                   Text(
                     DateFormat('MMMM yyyy').format(_selectedMonth),
                     style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                        letterSpacing: -0.3),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textPrimary,
+                      letterSpacing: -0.3,
+                    ),
                   ),
                   GestureDetector(
                     onTap: () => _showMonthPicker(context),
@@ -227,14 +389,29 @@ class _DashboardScreenState extends State<DashboardScreen>
               2,
               Row(
                 children: [
-                  _statTile('Present', monthStats.presentDays, AppColors.present,
-                      Icons.check_circle_outline_rounded, animate),
+                  _statTile(
+                    'Present',
+                    monthStats.presentDays,
+                    AppColors.present,
+                    Icons.check_circle_outline_rounded,
+                    animate,
+                  ),
                   const SizedBox(width: 12),
-                  _statTile('Half Day', monthStats.halfDays, AppColors.halfDay,
-                      Icons.timelapse_rounded, animate),
+                  _statTile(
+                    'Half Day',
+                    monthStats.halfDays,
+                    AppColors.halfDay,
+                    Icons.timelapse_rounded,
+                    animate,
+                  ),
                   const SizedBox(width: 12),
-                  _statTile('Absent', monthStats.absentDays, AppColors.absent,
-                      Icons.cancel_outlined, animate),
+                  _statTile(
+                    'Absent',
+                    monthStats.absentDays,
+                    AppColors.absent,
+                    Icons.cancel_outlined,
+                    animate,
+                  ),
                 ],
               ),
             ),
@@ -244,7 +421,7 @@ class _DashboardScreenState extends State<DashboardScreen>
             if (hasSalary) ...[
               animatedItem(3, const _SectionTitle('Salary & Earnings')),
               const SizedBox(height: 12),
-               animatedItem(
+              animatedItem(
                 3,
                 GestureDetector(
                   onTap: () {
@@ -267,11 +444,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                               children: [
                                 Row(
                                   children: [
-                                    const Text('Earned to Date',
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: AppColors.textSecondary)),
+                                    const Text(
+                                      'Earned to Date',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
                                     const SizedBox(width: 4),
                                     Icon(
                                       _isSalaryExpanded
@@ -286,28 +466,34 @@ class _DashboardScreenState extends State<DashboardScreen>
                                 Text(
                                   _money(monthStats.earnedSalary),
                                   style: const TextStyle(
-                                      fontSize: 30,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.forestGreen,
-                                      letterSpacing: -0.5),
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.forestGreen,
+                                    letterSpacing: -0.5,
+                                  ),
                                 ),
                               ],
                             ),
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.end,
                               children: [
-                                const Text('Base Salary',
-                                    style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: AppColors.textSecondary)),
+                                const Text(
+                                  'Base Salary',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
                                 const SizedBox(height: 6),
                                 Text(
                                   _money(profile.monthlySalary),
                                   style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textSecondary)),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -322,53 +508,77 @@ class _DashboardScreenState extends State<DashboardScreen>
                         const SizedBox(height: 18),
                         Row(
                           children: [
-                            _salaryMini('Estimated Full',
-                                _money(monthStats.estimatedFullSalary)),
-                            Container(width: 1, height: 30, color: AppColors.shadowDark),
+                            _salaryMini(
+                              'Estimated Full',
+                              _money(monthStats.estimatedFullSalary),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 30,
+                              color: AppColors.shadowDark,
+                            ),
                             const SizedBox(width: 16),
-                            _salaryMini('Total Deductions',
-                                _money(monthStats.deduction),
-                                color: AppColors.absent),
+                            _salaryMini(
+                              'Total Deductions',
+                              _money(monthStats.deduction),
+                              color: AppColors.absent,
+                            ),
                           ],
                         ),
                         AnimatedSize(
                           duration: const Duration(milliseconds: 300),
                           curve: Curves.easeInOut,
                           child: _isSalaryExpanded
-                              ? Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const SizedBox(height: 20),
-                                    const Divider(height: 1, thickness: 1, color: AppColors.screenBg),
-                                    const SizedBox(height: 16),
-                                    const Text(
-                                      'Salary Calculation Details',
-                                      style: TextStyle(
+                              ? () {
+                                  final daysInMonth = DateTime(
+                                    _selectedMonth.year,
+                                    _selectedMonth.month + 1,
+                                    0,
+                                  ).day;
+                                  final payableDays = monthStats.payableDays;
+                                  final dailyRate =
+                                      profile.monthlySalary / daysInMonth;
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 20),
+                                      const Divider(
+                                        height: 1,
+                                        thickness: 1,
+                                        color: AppColors.screenBg,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      const Text(
+                                        'Salary Calculation Details',
+                                        style: TextStyle(
                                           fontSize: 13,
                                           fontWeight: FontWeight.w700,
-                                          color: AppColors.textPrimary),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _calcRow(
-                                      'Daily Rate',
-                                      '${_money(profile.monthlySalary)} ÷ 30 days = ${_money(profile.monthlySalary / 30)}/day',
-                                    ),
-                                    _calcRow(
-                                      'Payable Days',
-                                      '${monthStats.presentDays} Present + ${monthStats.halfDays} Half Day (×0.5) = ${(monthStats.presentDays + monthStats.halfDays * 0.5).toStringAsFixed(1)} days',
-                                    ),
-                                    _calcRow(
-                                      'Earned Salary',
-                                      '${(monthStats.presentDays + monthStats.halfDays * 0.5).toStringAsFixed(1)} days × ${_money(profile.monthlySalary / 30)} = ${_money(monthStats.earnedSalary)}',
-                                      isGreen: true,
-                                    ),
-                                    _calcRow(
-                                      'Deductions',
-                                      '${monthStats.absentDays} Absent + ${monthStats.halfDays} Half Day (×0.5) = ${(monthStats.absentDays + monthStats.halfDays * 0.5).toStringAsFixed(1)} days × ${_money(profile.monthlySalary / 30)} = ${_money(monthStats.deduction)}',
-                                      isRed: monthStats.deduction > 0,
-                                    ),
-                                  ],
-                                )
+                                          color: AppColors.textPrimary,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _calcRow(
+                                        'Daily Rate',
+                                        '${_money(profile.monthlySalary)} ÷ $daysInMonth days = ${_money(dailyRate)}/day',
+                                      ),
+                                      _calcRow(
+                                        'Payable Days',
+                                        '${monthStats.presentDays} Pres. + ${(monthStats.halfDays * 0.5).toStringAsFixed(1)} Half + ${monthStats.paidHolidays.toStringAsFixed(1)} Paid Hol. = ${payableDays.toStringAsFixed(1)} days',
+                                      ),
+                                      _calcRow(
+                                        'Earned Salary',
+                                        '${payableDays.toStringAsFixed(1)} days × ${_money(dailyRate)} = ${_money(monthStats.earnedSalary)}',
+                                        isGreen: true,
+                                      ),
+                                      _calcRow(
+                                        'Deductions',
+                                        '${monthStats.absentDays} Abs. + ${(monthStats.halfDays * 0.5).toStringAsFixed(1)} Half + ${monthStats.deductedHolidays.toStringAsFixed(1)} Ded. Hol. = ${(monthStats.absentDays + monthStats.halfDays * 0.5 + monthStats.deductedHolidays).toStringAsFixed(1)} days × ${_money(dailyRate)} = ${_money(monthStats.deduction)}',
+                                        isRed: monthStats.deduction > 0,
+                                      ),
+                                    ],
+                                  );
+                                }()
                               : const SizedBox(width: double.infinity),
                         ),
                       ],
@@ -384,16 +594,20 @@ class _DashboardScreenState extends State<DashboardScreen>
                   decoration: softCard(radius: 20),
                   child: const Row(
                     children: [
-                      Icon(Icons.account_balance_wallet_outlined,
-                          color: AppColors.textSubtle, size: 28),
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: AppColors.textSubtle,
+                        size: 28,
+                      ),
                       SizedBox(width: 14),
                       Expanded(
                         child: Text(
                           'Add a monthly salary in your profile to track daily earnings.',
                           style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
                       ),
                     ],
@@ -404,28 +618,50 @@ class _DashboardScreenState extends State<DashboardScreen>
             const SizedBox(height: 28),
 
             // Overall summary
-            animatedItem(4, const _SectionTitle('Overall History')),
+            animatedItem(5, const _SectionTitle('Overall History')),
             const SizedBox(height: 12),
             animatedItem(
-              4,
+              5,
               Container(
                 padding: const EdgeInsets.all(22),
                 decoration: softCard(radius: 22),
                 child: Column(
                   children: [
-                    _overallRow('Total Present', '${overall.presentDays} Days',
-                        AppColors.present),
-                    const Divider(height: 24, thickness: 1, color: AppColors.screenBg),
-                    _overallRow('Total Half Days', '${overall.halfDays} Days',
-                        AppColors.halfDay),
-                    const Divider(height: 24, thickness: 1, color: AppColors.screenBg),
-                    _overallRow('Total Absent', '${overall.absentDays} Days',
-                        AppColors.absent),
-                    const Divider(height: 24, thickness: 1, color: AppColors.screenBg),
                     _overallRow(
-                        'Overall Percentage',
-                        '${overall.percentage.toStringAsFixed(1)}%',
-                        AppColors.forestGreen),
+                      'Total Present',
+                      '${overall.presentDays} Days',
+                      AppColors.present,
+                    ),
+                    const Divider(
+                      height: 24,
+                      thickness: 1,
+                      color: AppColors.screenBg,
+                    ),
+                    _overallRow(
+                      'Total Half Days',
+                      '${overall.halfDays} Days',
+                      AppColors.halfDay,
+                    ),
+                    const Divider(
+                      height: 24,
+                      thickness: 1,
+                      color: AppColors.screenBg,
+                    ),
+                    _overallRow(
+                      'Total Absent',
+                      '${overall.absentDays} Days',
+                      AppColors.absent,
+                    ),
+                    const Divider(
+                      height: 24,
+                      thickness: 1,
+                      color: AppColors.screenBg,
+                    ),
+                    _overallRow(
+                      'Overall Percentage',
+                      '${overall.percentage.toStringAsFixed(1)}%',
+                      AppColors.forestGreen,
+                    ),
                   ],
                 ),
               ),
@@ -451,8 +687,18 @@ class _DashboardScreenState extends State<DashboardScreen>
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
             final months = [
-              'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-              'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+              'Jan',
+              'Feb',
+              'Mar',
+              'Apr',
+              'May',
+              'Jun',
+              'Jul',
+              'Aug',
+              'Sep',
+              'Oct',
+              'Nov',
+              'Dec',
             ];
 
             return Container(
@@ -492,9 +738,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                       Text(
                         '$pickerYear',
                         style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textPrimary),
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                       IconButton(
                         onPressed: pickerYear < currentYear
@@ -514,18 +761,22 @@ class _DashboardScreenState extends State<DashboardScreen>
                   GridView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 2.2,
-                    ),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 4,
+                          mainAxisSpacing: 10,
+                          crossAxisSpacing: 10,
+                          childAspectRatio: 2.2,
+                        ),
                     itemCount: 12,
                     itemBuilder: (_, i) {
                       final monthNum = i + 1;
-                      final isFuture = pickerYear > currentYear ||
-                          (pickerYear == currentYear && monthNum > currentMonth);
-                      final isSelected = pickerYear == _selectedMonth.year &&
+                      final isFuture =
+                          pickerYear > currentYear ||
+                          (pickerYear == currentYear &&
+                              monthNum > currentMonth);
+                      final isSelected =
+                          pickerYear == _selectedMonth.year &&
                           monthNum == _selectedMonth.month;
 
                       return GestureDetector(
@@ -534,7 +785,10 @@ class _DashboardScreenState extends State<DashboardScreen>
                             : () {
                                 HapticFeedback.selectionClick();
                                 setState(() {
-                                  _selectedMonth = DateTime(pickerYear, monthNum);
+                                  _selectedMonth = DateTime(
+                                    pickerYear,
+                                    monthNum,
+                                  );
                                   _isSalaryExpanded = false;
                                 });
                                 Navigator.pop(ctx);
@@ -545,15 +799,15 @@ class _DashboardScreenState extends State<DashboardScreen>
                             color: isSelected
                                 ? AppColors.forestGreen
                                 : isFuture
-                                    ? AppColors.screenBg
-                                    : AppColors.cardWhite,
+                                ? AppColors.screenBg
+                                : AppColors.cardWhite,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
                               color: isSelected
                                   ? AppColors.forestGreen
                                   : isFuture
-                                      ? Colors.transparent
-                                      : AppColors.shadowDark,
+                                  ? Colors.transparent
+                                  : AppColors.shadowDark,
                               width: 1.5,
                             ),
                           ),
@@ -562,13 +816,14 @@ class _DashboardScreenState extends State<DashboardScreen>
                             months[i],
                             style: TextStyle(
                               fontSize: 13,
-                              fontWeight:
-                                  isSelected ? FontWeight.w700 : FontWeight.w600,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.w600,
                               color: isSelected
                                   ? Colors.white
                                   : isFuture
-                                      ? AppColors.textSubtle.withValues(alpha: 0.4)
-                                      : AppColors.textPrimary,
+                                  ? AppColors.textSubtle.withValues(alpha: 0.4)
+                                  : AppColors.textPrimary,
                             ),
                           ),
                         ),
@@ -585,7 +840,12 @@ class _DashboardScreenState extends State<DashboardScreen>
   }
 
   Widget _statTile(
-      String label, int value, Color color, IconData icon, bool animate) {
+    String label,
+    int value,
+    Color color,
+    IconData icon,
+    bool animate,
+  ) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 20),
@@ -605,17 +865,21 @@ class _DashboardScreenState extends State<DashboardScreen>
               value: value.toDouble(),
               animate: animate,
               style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                  letterSpacing: -0.5),
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary,
+                letterSpacing: -0.5,
+              ),
             ),
             const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textSecondary)),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
           ],
         ),
       ),
@@ -631,17 +895,23 @@ class _DashboardScreenState extends State<DashboardScreen>
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 14),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textSecondary,
+          ),
+        ),
         const Spacer(),
-        Text(value,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary)),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w800,
+            color: AppColors.textPrimary,
+          ),
+        ),
       ],
     );
   }
@@ -651,23 +921,34 @@ class _DashboardScreenState extends State<DashboardScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textSubtle)),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textSubtle,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(value,
-              style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: color ?? AppColors.textPrimary)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: color ?? AppColors.textPrimary,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _calcRow(String label, String value, {bool isGreen = false, bool isRed = false}) {
+  Widget _calcRow(
+    String label,
+    String value, {
+    bool isGreen = false,
+    bool isRed = false,
+  }) {
     Color valColor = AppColors.textPrimary;
     if (isGreen) valColor = AppColors.forestGreen;
     if (isRed) valColor = AppColors.absent;
@@ -695,7 +976,9 @@ class _DashboardScreenState extends State<DashboardScreen>
               textAlign: TextAlign.right,
               style: TextStyle(
                 fontSize: 12,
-                fontWeight: (isGreen || isRed) ? FontWeight.w700 : FontWeight.w500,
+                fontWeight: (isGreen || isRed)
+                    ? FontWeight.w700
+                    : FontWeight.w500,
                 color: valColor,
               ),
             ),
@@ -711,12 +994,15 @@ class _SectionTitle extends StatelessWidget {
   const _SectionTitle(this.text);
   @override
   Widget build(BuildContext context) {
-    return Text(text,
-        style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w800,
-            color: AppColors.textPrimary,
-            letterSpacing: -0.3));
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 16,
+        fontWeight: FontWeight.w800,
+        color: AppColors.textPrimary,
+        letterSpacing: -0.3,
+      ),
+    );
   }
 }
 
@@ -745,8 +1031,7 @@ class _PercentRing extends StatelessWidget {
                       value: v,
                       strokeWidth: 8,
                       backgroundColor: Colors.white24,
-                      valueColor:
-                          const AlwaysStoppedAnimation(AppColors.lime),
+                      valueColor: const AlwaysStoppedAnimation(AppColors.lime),
                     ),
                   )
                 : CircularProgressIndicator(
@@ -756,7 +1041,11 @@ class _PercentRing extends StatelessWidget {
                     valueColor: const AlwaysStoppedAnimation(AppColors.lime),
                   ),
           ),
-          const Icon(Icons.verified_user_rounded, color: AppColors.lime, size: 28),
+          const Icon(
+            Icons.verified_user_rounded,
+            color: AppColors.lime,
+            size: 28,
+          ),
         ],
       ),
     );

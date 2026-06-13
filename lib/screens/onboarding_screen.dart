@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-// For ImageFilter to implement glassmorphism
 
 import '../theme/app_theme.dart';
 import '../widgets/shield_logo.dart';
 import '../providers/app_provider.dart';
-import 'profile_setup_screen.dart';
-// import '../widgets/glass_card.dart'; // Import GlassCard
+import 'attendance_setup_wizard_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -50,7 +48,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     if (provider.profiles.isEmpty) {
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => const ProfileSetupScreen(isFirst: true),
+          builder: (_) => const AttendanceSetupWizardScreen(isFirst: true),
         ),
       );
     } else {
@@ -60,7 +58,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
       backgroundColor: Colors.white,

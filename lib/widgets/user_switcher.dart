@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
-import '../screens/profile_setup_screen.dart';
+import '../screens/attendance_setup_wizard_screen.dart';
 
 /// Quick user-switcher bottom sheet opened from the avatar in the header.
 class UserSwitcher extends StatelessWidget {
@@ -138,7 +138,7 @@ class UserSwitcher extends StatelessWidget {
               onPressed: () {
                 Navigator.pop(context);
                 Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => const ProfileSetupScreen()));
+                    builder: (_) => const AttendanceSetupWizardScreen(isFirst: false)));
               },
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.forestGreen,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'package:home_widget/home_widget.dart';
+import 'package:geolocator/geolocator.dart';
 
 import 'theme/app_theme.dart';
 import 'models/attendance_status.dart';
@@ -27,8 +28,19 @@ Future<void> main() async {
   final notifications = NotificationService();
   await notifications.init();
   unawaited(notifications.requestPermissions());
+  unawaited(
+    Future(() async {
+      try {
+        final permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          await Geolocator.requestPermission();
+        }
+      } catch (_) {}
+    }),
+  );
 
   final provider = AppProvider(storage, notifications, alarmStorage)..load();
+  await provider.gpsAttendance.requestLocationPermission();
 
   notifications.onAction = (profileId, actionId) async {
     final today = DateTime.now();
@@ -42,7 +54,11 @@ Future<void> main() async {
         await provider.mark(date, AttendanceStatus.absent);
         break;
       case NotificationService.actionHalf:
-        await provider.mark(date, AttendanceStatus.halfDay, half: HalfType.firstHalf);
+        await provider.mark(
+          date,
+          AttendanceStatus.halfDay,
+          half: HalfType.firstHalf,
+        );
         break;
     }
   };
@@ -57,9 +73,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        ChangeNotifierProvider.value(value: provider),
-      ],
+      providers: [ChangeNotifierProvider.value(value: provider)],
       child: MaterialApp(
         title: 'AttendX',
         debugShowCheckedModeBanner: false,
@@ -237,8 +251,11 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
                       icon: Icons.timelapse,
                       color: AppColors.halfDay,
                       onTap: () async {
-                        await provider.mark(date, AttendanceStatus.halfDay,
-                            half: HalfType.firstHalf);
+                        await provider.mark(
+                          date,
+                          AttendanceStatus.halfDay,
+                          half: HalfType.firstHalf,
+                        );
                         if (context.mounted) {
                           Navigator.pop(context);
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -296,8 +313,8 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.08),
-          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+          color: color.withValues(alpha: 0.08),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -340,10 +357,12 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
               key: const ValueKey('splash'),
               onDone: () async {
                 setState(() => _showSplash = false);
-                
+
                 // Check for updates
                 final result = await _updateService.checkForUpdate();
-                if (result.status == UpdateStatus.updateAvailable && result.info != null && context.mounted) {
+                if (result.status == UpdateStatus.updateAvailable &&
+                    result.info != null &&
+                    context.mounted) {
                   UpdateDialog.show(context, result.info!, _updateService);
                 }
 
@@ -357,10 +376,7 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
                 }
               },
             )
-          : KeyedSubtree(
-              key: const ValueKey('app'),
-              child: destination,
-            ),
+          : KeyedSubtree(key: const ValueKey('app'), child: destination),
     );
   }
 }
