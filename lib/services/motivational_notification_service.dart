@@ -156,22 +156,68 @@ class MotivationalNotificationService {
     return false;
   }
 
+  bool _isSandwichLeave(String profileId, DateTime date, Map<DateTime, AttendanceEntry> records) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    DateTime prevDate = normalizedDate.subtract(const Duration(days: 1));
+    AttendanceStatus? prevStatus;
+    for (int i = 0; i < 30; i++) {
+      final entry = records[prevDate];
+      if (entry != null) {
+        if (entry.status != AttendanceStatus.holiday) {
+          prevStatus = entry.status;
+          break;
+        }
+      } else {
+        break;
+      }
+      prevDate = prevDate.subtract(const Duration(days: 1));
+    }
+    return prevStatus == AttendanceStatus.absent;
+  }
+
   bool _checkSalaryMilestones(Profile profile, Map<DateTime, AttendanceEntry> records, DateTime today, int year, int month) {
     if (!profile.hasSalaryTracking || profile.monthlySalary <= 0) return false;
 
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final perDay = profile.monthlySalary / daysInMonth;
 
+    final Map<DateTime, AttendanceEntry> fullRecords = Map.from(records);
+    final start = DateTime(profile.startDate.year, profile.startDate.month, profile.startDate.day);
+    final end = DateTime.now().add(const Duration(days: 365));
+    var d = start;
+    while (!d.isAfter(end)) {
+      final dateKey = '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+      if (d.weekday == DateTime.sunday || profile.holidays.contains(dateKey)) {
+        final normalized = DateTime(d.year, d.month, d.day);
+        if (!fullRecords.containsKey(normalized)) {
+          fullRecords[normalized] = AttendanceEntry(AttendanceStatus.holiday, null);
+        }
+      }
+      d = d.add(const Duration(days: 1));
+    }
+
     double payableDays = 0;
-    for (int day = 1; day <= today.day; day++) {
+    DateTime monthStart = DateTime(year, month, 1);
+    final pStart = DateTime(profile.startDate.year, profile.startDate.month, profile.startDate.day);
+    if (pStart.isAfter(monthStart) && pStart.year == year && pStart.month == month) {
+      monthStart = pStart;
+    }
+
+    for (int day = monthStart.day; day <= today.day; day++) {
       final date = DateTime(year, month, day);
-      final entry = records[date];
+      final entry = fullRecords[date];
       if (entry != null) {
-        if (entry.status == AttendanceStatus.present) {
+        var effectiveStatus = entry.status;
+        if (effectiveStatus == AttendanceStatus.holiday) {
+          if (profile.sandwichLeaveEnabled && _isSandwichLeave(profile.id, date, fullRecords)) {
+            effectiveStatus = AttendanceStatus.absent;
+          }
+        }
+        if (effectiveStatus == AttendanceStatus.present) {
           payableDays += 1.0;
-        } else if (entry.status == AttendanceStatus.halfDay) {
+        } else if (effectiveStatus == AttendanceStatus.halfDay) {
           payableDays += 0.5;
-        } else if (entry.status == AttendanceStatus.holiday) {
+        } else if (effectiveStatus == AttendanceStatus.holiday) {
           payableDays += 1.0;
         }
       }

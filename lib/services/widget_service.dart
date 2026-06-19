@@ -58,7 +58,9 @@ class WidgetService {
     final monthYear = DateFormat('MMMM yyyy').format(now);
 
     // Save data to widget shared preferences
+    final todayStatusDate = DateFormat('yyyy-MM-dd').format(now);
     await HomeWidget.saveWidgetData<String>('today_status', todayStatus);
+    await HomeWidget.saveWidgetData<String>('today_status_date', todayStatusDate);
     await HomeWidget.saveWidgetData<String>('today_time', todayTime);
     await HomeWidget.saveWidgetData<String>('widget_date', widgetDate);
     await HomeWidget.saveWidgetData<String>('profile_name', profile.name);

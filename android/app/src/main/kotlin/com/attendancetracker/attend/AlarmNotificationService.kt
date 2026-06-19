@@ -46,6 +46,20 @@ class AlarmNotificationService : Service() {
             return START_NOT_STICKY
         }
 
+        // Suppress notification if already marked today
+        val widgetPrefs = getSharedPreferences("HomeWidgetSharedPreferences", Context.MODE_PRIVATE)
+        val todayDateStr = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(today.time)
+        val savedStatusDate = widgetPrefs.getString("today_status_date", "") ?: ""
+        val todayStatus = widgetPrefs.getString("today_status", "pending") ?: "pending"
+        if (savedStatusDate == todayDateStr && todayStatus != "pending") {
+            Log.d(TAG, "Attendance already marked today ($todayStatus) — skipping notification")
+            if (!isOneShot) {
+                AlarmScheduler.scheduleAlarm(this, id, profileId, profileName, hour, minute, false)
+            }
+            stopSelf(startId)
+            return START_NOT_STICKY
+        }
+
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         // 1. Must call startForeground immediately with a SEPARATE id (FG_NOTIF_ID)

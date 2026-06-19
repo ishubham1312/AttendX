@@ -38,6 +38,7 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
   double _radius = 50.0;
   TimeOfDay? _startTime;
   TimeOfDay? _cutoffTime;
+  bool _useCustomTime = false;
 
   bool _isSearching = false;
   List<Map<String, dynamic>> _searchResults = [];
@@ -54,9 +55,11 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
       _radius = e.radius.clamp(10.0, 100.0);
       _startTime = e.startTime != null ? _parseTimeOfDay(e.startTime!) : null;
       _cutoffTime = e.cutoffTime != null ? _parseTimeOfDay(e.cutoffTime!) : null;
+      _useCustomTime = _startTime != null && _cutoffTime != null;
     } else {
       _nameCtrl.text = widget.autoNameFromType ?? 'Workplace';
       _getUserCurrentLocation();
+      _useCustomTime = false;
     }
   }
 
@@ -171,23 +174,25 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
       return;
     }
 
-    if (_startTime == null || _cutoffTime == null) {
+    if (_useCustomTime && (_startTime == null || _cutoffTime == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('On Time and Cut-off Time are required')),
+        const SnackBar(content: Text('On Time and Cut-off Time are required when custom time is enabled')),
       );
       return;
     }
 
-    final startMin = _startTime!.hour * 60 + _startTime!.minute;
-    final cutoffMin = _cutoffTime!.hour * 60 + _cutoffTime!.minute;
-    if (startMin >= cutoffMin) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Start time must be before cut-off time'),
-          duration: Duration(seconds: 2),
-        ),
-      );
-      return;
+    if (_useCustomTime && _startTime != null && _cutoffTime != null) {
+      final startMin = _startTime!.hour * 60 + _startTime!.minute;
+      final cutoffMin = _cutoffTime!.hour * 60 + _cutoffTime!.minute;
+      if (startMin >= cutoffMin) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Start time must be before cut-off time'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
     }
 
     final newLoc = AttendanceLocation(
@@ -197,8 +202,8 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
       latitude: _selectedPoint.latitude,
       longitude: _selectedPoint.longitude,
       radius: _radius,
-      startTime: _startTime != null ? _formatTimeOfDay(_startTime!) : null,
-      cutoffTime: _cutoffTime != null ? _formatTimeOfDay(_cutoffTime!) : null,
+      startTime: _useCustomTime && _startTime != null ? _formatTimeOfDay(_startTime!) : null,
+      cutoffTime: _useCustomTime && _cutoffTime != null ? _formatTimeOfDay(_cutoffTime!) : null,
     );
 
     // If called from wizard, return via callback instead of saving to provider
@@ -506,28 +511,57 @@ class _LocationSetupScreenState extends State<LocationSetupScreen> {
                     const SizedBox(height: 14),
 
                     // On Time & Cut-off Time Pickers
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildOptionalTimePicker(
-                            label: 'On Time (Check-In Start)',
-                            time: _startTime,
-                            onSet: (t) => setState(() => _startTime = t),
-                            onClear: () => setState(() => _startTime = null),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildOptionalTimePicker(
-                            label: 'Cut-off Time (Deadline)',
-                            time: _cutoffTime,
-                            onSet: (t) => setState(() => _cutoffTime = t),
-                            onClear: () => setState(() => _cutoffTime = null),
-                          ),
-                        ),
-                      ],
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text(
+                        'Custom Location Check Time',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppColors.textPrimary),
+                      ),
+                      subtitle: const Text(
+                        'Specify custom on-time and cutoff hours for this location',
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                      value: _useCustomTime,
+                      activeColor: AppColors.forestGreen,
+                      onChanged: (val) {
+                        setState(() {
+                          _useCustomTime = val;
+                          if (!val) {
+                            _startTime = null;
+                            _cutoffTime = null;
+                          } else {
+                            _startTime = const TimeOfDay(hour: 9, minute: 0);
+                            _cutoffTime = const TimeOfDay(hour: 9, minute: 30);
+                          }
+                        });
+                      },
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 8),
+
+                    if (_useCustomTime) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildOptionalTimePicker(
+                              label: 'On Time (Check-In Start)',
+                              time: _startTime,
+                              onSet: (t) => setState(() => _startTime = t),
+                              onClear: () => setState(() => _startTime = null),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildOptionalTimePicker(
+                              label: 'Cut-off Time (Deadline)',
+                              time: _cutoffTime,
+                              onSet: (t) => setState(() => _cutoffTime = t),
+                              onClear: () => setState(() => _cutoffTime = null),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                    ],
 
                     SizedBox(
                       height: 48,

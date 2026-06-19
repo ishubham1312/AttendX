@@ -44,11 +44,20 @@ class AppProvider extends ChangeNotifier {
   final AlarmStorageService alarmStorage;
   late final GPSAttendanceService gpsAttendance;
   late final MotivationalNotificationService motivationalNotifications;
+  
+  AttendanceStatus? _lastTodayStatus;
 
   AppProvider(this.storage, this.notifications, this.alarmStorage) {
     gpsAttendance = GPSAttendanceService(storage, notifications);
     gpsAttendance.addListener(() {
       notifyListeners();
+      final today = DateTime.now();
+      final todayDate = DateTime(today.year, today.month, today.day);
+      final currentStatus = entryFor(todayDate)?.status;
+      if (currentStatus != _lastTodayStatus) {
+        _lastTodayStatus = currentStatus;
+        WidgetService.updateWidgets(this);
+      }
     });
     motivationalNotifications = MotivationalNotificationService(storage, notifications);
   }
@@ -82,6 +91,10 @@ class AppProvider extends ChangeNotifier {
       gpsAttendance.stopTracking();
     }
 
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    _lastTodayStatus = entryFor(todayDate)?.status;
+
     notifyListeners();
     WidgetService.updateWidgets(this);
     // Re-schedule notifications for all profiles on every app launch
@@ -90,6 +103,70 @@ class AppProvider extends ChangeNotifier {
     checkAndApplyPendingAttendance();
     // Ensure primary alarms exist for all profiles
     _ensurePrimaryAlarms();
+    _applyAutoAbsent();
+  }
+
+  Future<void> _applyAutoAbsent() async {
+    final now = DateTime.now();
+    final todayDate = DateTime(now.year, now.month, now.day);
+    bool anyChanged = false;
+
+    for (final p in _profiles) {
+      final start = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+      var d = start;
+      while (!d.isAfter(now)) {
+        final dateKeyStr = _dateKey(d);
+        final dDate = DateTime(d.year, d.month, d.day);
+
+        // Skip Sundays and holidays
+        if (d.weekday == DateTime.sunday || p.holidays.contains(dateKeyStr)) {
+          d = d.add(const Duration(days: 1));
+          continue;
+        }
+
+        final isToday = dDate.isAtSameMomentAs(todayDate);
+        if (isToday) {
+          if (now.hour >= 14) {
+            final existing = storage.getStatusRaw(p.id, dDate);
+            if (existing == null) {
+              final entry = AttendanceEntry(AttendanceStatus.absent);
+              await storage.setStatusRaw(p.id, dDate, entry.toStorage());
+
+              final metadata = {
+                'timestamp': now.millisecondsSinceEpoch,
+                'method': 'Auto Marked Absent (2 PM Deadline)',
+                'gpsVerified': false,
+                'reason': 'User did not mark attendance by 2 PM deadline.',
+              };
+              await storage.setAttendanceMetadata(p.id, dDate, metadata);
+              anyChanged = true;
+            }
+          }
+        } else {
+          final existing = storage.getStatusRaw(p.id, dDate);
+          if (existing == null) {
+            final entry = AttendanceEntry(AttendanceStatus.absent);
+            await storage.setStatusRaw(p.id, dDate, entry.toStorage());
+
+            final metadata = {
+              'timestamp': d.millisecondsSinceEpoch,
+              'method': 'Auto Marked Absent (Missed Day)',
+              'gpsVerified': false,
+              'reason': 'User did not mark attendance for this day.',
+            };
+            await storage.setAttendanceMetadata(p.id, dDate, metadata);
+            anyChanged = true;
+          }
+        }
+
+        d = d.add(const Duration(days: 1));
+      }
+    }
+
+    if (anyChanged) {
+      notifyListeners();
+      WidgetService.updateWidgets(this);
+    }
   }
 
   void _ensurePrimaryAlarms() {
@@ -200,6 +277,9 @@ class AppProvider extends ChangeNotifier {
     _activeProfileId = id;
     await storage.setActiveProfileId(id);
     await gpsAttendance.init(id);
+    final today = DateTime.now();
+    final todayDate = DateTime(today.year, today.month, today.day);
+    _lastTodayStatus = entryFor(todayDate)?.status;
     notifyListeners();
     WidgetService.updateWidgets(this);
   }

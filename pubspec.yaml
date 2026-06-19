@@ -1,7 +1,7 @@
 name: attendx
 description: "Attendance Tracker - track daily attendance and salary effortlessly."
 publish_to: "none"
-version: 2.5.1+2
+version: 2.6.0
 
 environment:
   sdk: ^3.9.2

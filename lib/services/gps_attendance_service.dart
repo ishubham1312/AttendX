@@ -102,14 +102,25 @@ class GPSAttendanceService extends ChangeNotifier {
     }
 
     for (final loc in profile.locations) {
-      final start = _parseTime(loc.startTime);
-      final cutoff = _parseTime(loc.cutoffTime);
-      if (start == null || cutoff == null) continue;
+      int startMinutes;
+      int cutoffMinutes;
+
+      if (loc.startTime == null || loc.cutoffTime == null) {
+        final arrivalHour = profile.reminderHour;
+        final arrivalMin = profile.reminderMinute;
+        final arrivalMinutes = arrivalHour * 60 + arrivalMin;
+        startMinutes = arrivalMinutes - 20;
+        cutoffMinutes = arrivalMinutes + 20;
+      } else {
+        final start = _parseTime(loc.startTime);
+        final cutoff = _parseTime(loc.cutoffTime);
+        if (start == null || cutoff == null) continue;
+        startMinutes = start.hour * 60 + start.minute;
+        cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
+      }
 
       final nowTime = TimeOfDay.fromDateTime(today);
       final nowMinutes = nowTime.hour * 60 + nowTime.minute;
-      final startMinutes = start.hour * 60 + start.minute;
-      final cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
 
       if (nowMinutes >= startMinutes && nowMinutes <= cutoffMinutes) {
         return true;
@@ -157,14 +168,25 @@ class GPSAttendanceService extends ChangeNotifier {
     // Check if current time is within any location's attendance window
     bool inWindow = false;
     for (final loc in profile.locations) {
-      final start = _parseTime(loc.startTime);
-      final cutoff = _parseTime(loc.cutoffTime);
-      if (start == null || cutoff == null) continue;
+      int startMinutes;
+      int cutoffMinutes;
+
+      if (loc.startTime == null || loc.cutoffTime == null) {
+        final arrivalHour = profile.reminderHour;
+        final arrivalMin = profile.reminderMinute;
+        final arrivalMinutes = arrivalHour * 60 + arrivalMin;
+        startMinutes = arrivalMinutes - 20;
+        cutoffMinutes = arrivalMinutes + 20;
+      } else {
+        final start = _parseTime(loc.startTime);
+        final cutoff = _parseTime(loc.cutoffTime);
+        if (start == null || cutoff == null) continue;
+        startMinutes = start.hour * 60 + start.minute;
+        cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
+      }
 
       final nowTime = TimeOfDay.fromDateTime(today);
       final nowMinutes = nowTime.hour * 60 + nowTime.minute;
-      final startMinutes = start.hour * 60 + start.minute;
-      final cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
 
       if (nowMinutes >= startMinutes && nowMinutes <= cutoffMinutes) {
         inWindow = true;
@@ -428,6 +450,8 @@ class GPSAttendanceService extends ChangeNotifier {
   void _attemptAutoMark(Profile profile, AttendanceLocation location, Position position) async {
     final today = DateTime.now();
     final dateKey = DateTime(today.year, today.month, today.day);
+    final nowTime = TimeOfDay.fromDateTime(today);
+    final nowMinutes = nowTime.hour * 60 + nowTime.minute;
 
     // 1. Check if already marked today
     final existingRaw = storage.getStatusRaw(profile.id, dateKey);
@@ -435,29 +459,32 @@ class GPSAttendanceService extends ChangeNotifier {
 
     if (existingRaw == null) {
       // First arrival of the day!
-      final start = _parseTime(location.startTime);
-      final cutoff = _parseTime(location.cutoffTime);
+      int startMinutes;
+      int lateMinutes;
+      if (location.startTime == null || location.cutoffTime == null) {
+        final arrivalHour = profile.reminderHour;
+        final arrivalMin = profile.reminderMinute;
+        final arrivalMinutes = arrivalHour * 60 + arrivalMin;
+        startMinutes = arrivalMinutes - 20;
+        lateMinutes = arrivalMinutes;
+      } else {
+        final start = _parseTime(location.startTime);
+        final cutoff = _parseTime(location.cutoffTime);
+        startMinutes = start != null ? (start.hour * 60 + start.minute) : 0;
+        lateMinutes = cutoff != null ? (cutoff.hour * 60 + cutoff.minute) : 1440;
+      }
 
-      final nowTime = TimeOfDay.fromDateTime(today);
-      final nowMinutes = nowTime.hour * 60 + nowTime.minute;
-
-      if (start != null) {
-        final startMinutes = start.hour * 60 + start.minute;
-        if (nowMinutes < startMinutes) {
-          // Too early, don't mark yet
-          return;
-        }
+      if (nowMinutes < startMinutes) {
+        // Too early, don't mark yet
+        return;
       }
 
       bool isLate = false;
       String? delayStr;
-      if (cutoff != null) {
-        final cutoffMinutes = cutoff.hour * 60 + cutoff.minute;
-        if (nowMinutes > cutoffMinutes) {
-          isLate = true;
-          final delay = nowMinutes - cutoffMinutes;
-          delayStr = "$delay minutes";
-        }
+      if (nowMinutes > lateMinutes) {
+        isLate = true;
+        final delay = nowMinutes - lateMinutes;
+        delayStr = "$delay minutes";
       }
 
       // Anti-Fraud Measures
@@ -607,19 +634,30 @@ class GPSAttendanceService extends ChangeNotifier {
       return; // Already marked today
     }
 
+    final nowTime = TimeOfDay.fromDateTime(today);
+    final nowMin = nowTime.hour * 60 + nowTime.minute;
+
     // Process closest location timing
     for (final loc in profile.locations) {
-      final start = _parseTime(loc.startTime);
-      final cutoff = _parseTime(loc.cutoffTime);
-      if (cutoff == null) continue; // Skip deadline checks if cutoff is not configured
-
-      final nowTime = TimeOfDay.fromDateTime(today);
-      final nowMin = nowTime.hour * 60 + nowTime.minute;
-      final cutoffMin = cutoff.hour * 60 + cutoff.minute;
-      final startMin = start != null ? start.hour * 60 + start.minute : 0;
+      int startMin;
+      int cutoffMin;
+      
+      final hasCustom = loc.startTime != null && loc.cutoffTime != null;
+      if (!hasCustom) {
+        final arrivalHour = profile.reminderHour;
+        final arrivalMin = profile.reminderMinute;
+        final arrivalMinutes = arrivalHour * 60 + arrivalMin;
+        startMin = arrivalMinutes - 20;
+        cutoffMin = arrivalMinutes + 20;
+      } else {
+        final start = _parseTime(loc.startTime);
+        final cutoff = _parseTime(loc.cutoffTime);
+        startMin = start != null ? (start.hour * 60 + start.minute) : 0;
+        cutoffMin = cutoff != null ? (cutoff.hour * 60 + cutoff.minute) : 1440;
+      }
 
       // 1. Failure Alarm Check during the attendance window
-      if (start != null && nowMin >= startMin && nowMin <= cutoffMin) {
+      if (nowMin >= startMin && nowMin <= cutoffMin) {
         final permission = await Geolocator.checkPermission();
         final gpsEnabled = await Geolocator.isLocationServiceEnabled();
         
@@ -672,49 +710,81 @@ class GPSAttendanceService extends ChangeNotifier {
       }
 
       // 2. Absent Detection: If current time is past cutoff time and user never entered
-      if (nowMin > cutoffMin && nowMin < cutoffMin + 5) {
-        // Just passed cutoff time! Mark absent
-        final entry = AttendanceEntry(AttendanceStatus.absent);
-        await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
+      if (hasCustom) {
+        if (nowMin > cutoffMin && nowMin < cutoffMin + 5) {
+          // Just passed cutoff time! Mark absent
+          final entry = AttendanceEntry(AttendanceStatus.absent);
+          await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
 
-        final metadata = {
-          'timestamp': today.millisecondsSinceEpoch,
-          'latitude': _currentPosition?.latitude ?? 0.0,
-          'longitude': _currentPosition?.longitude ?? 0.0,
-          'accuracy': _currentPosition?.accuracy ?? 0.0,
-          'method': 'GPS Auto Marked',
-          'locationName': loc.name,
-          'gpsVerified': false,
-          'reason': 'Attendance window closed. User was not detected inside the geofence area.',
-        };
-        await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
+          final metadata = {
+            'timestamp': today.millisecondsSinceEpoch,
+            'latitude': _currentPosition?.latitude ?? 0.0,
+            'longitude': _currentPosition?.longitude ?? 0.0,
+            'accuracy': _currentPosition?.accuracy ?? 0.0,
+            'method': 'GPS Auto Marked',
+            'locationName': loc.name,
+            'gpsVerified': false,
+            'reason': 'Attendance window closed. User was not detected inside the geofence area.',
+          };
+          await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
 
-        _sendNotification(
-          90004,
-          "❌ Attendance Missed",
-          "Attendance window has closed. You were not detected within the ${loc.name} area.",
-        );
-        notifyListeners();
+          _sendNotification(
+            90004,
+            "❌ Attendance Missed",
+            "Attendance window has closed. You were not detected within the ${loc.name} area.",
+          );
+          notifyListeners();
 
-        // Trigger motivational check
-        final motivational = MotivationalNotificationService(storage, notifications);
-        Future.delayed(const Duration(seconds: 2), () {
-          motivational.checkAndTrigger(profile);
-        });
-        return;
+          // Trigger motivational check
+          final motivational = MotivationalNotificationService(storage, notifications);
+          Future.delayed(const Duration(seconds: 2), () {
+            motivational.checkAndTrigger(profile);
+          });
+          return;
+        }
+
+        // 3. Escalating reminders before cutoff
+        final diff = cutoffMin - nowMin;
+        if (diff == 60) {
+          _sendNotification(90010, "⏰ Attendance Reminder", "You have not reached your attendance location yet.");
+        } else if (diff == 30) {
+          _sendNotification(90011, "⏰ Deadline Approaching", "Attendance deadline is approaching.");
+        } else if (diff == 15) {
+          _sendNotification(90012, "⏰ Attendance Warning", "You are still outside the attendance area.");
+        } else if (diff == 5) {
+          _sendNotification(90013, "⚠️ Critical Attendance Alert", "Attendance may be marked absent if you do not arrive soon.");
+        }
       }
+    }
 
-      // 3. Escalating reminders before cutoff
-      final diff = cutoffMin - nowMin;
-      if (diff == 60) {
-        _sendNotification(90010, "⏰ Attendance Reminder", "You have not reached your attendance location yet.");
-      } else if (diff == 30) {
-        _sendNotification(90011, "⏰ Deadline Approaching", "Attendance deadline is approaching.");
-      } else if (diff == 15) {
-        _sendNotification(90012, "⏰ Attendance Warning", "You are still outside the attendance area.");
-      } else if (diff == 5) {
-        _sendNotification(90013, "⚠️ Critical Attendance Alert", "Attendance may be marked absent if you do not arrive soon.");
-      }
+    // 4. Global 2 PM Auto-Absent deadline for all profiles
+    if (nowTime.hour >= 14) {
+      final entry = AttendanceEntry(AttendanceStatus.absent);
+      await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
+
+      final metadata = {
+        'timestamp': today.millisecondsSinceEpoch,
+        'latitude': _currentPosition?.latitude ?? 0.0,
+        'longitude': _currentPosition?.longitude ?? 0.0,
+        'accuracy': _currentPosition?.accuracy ?? 0.0,
+        'method': 'Auto Marked Absent (2 PM Deadline)',
+        'gpsVerified': false,
+        'reason': 'User did not mark attendance by 2 PM deadline.',
+      };
+      await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
+
+      _sendNotification(
+        90004,
+        "❌ Attendance Marked Absent",
+        "Attendance marked absent automatically as 2 PM deadline passed.",
+      );
+      notifyListeners();
+
+      // Trigger motivational check
+      final motivational = MotivationalNotificationService(storage, notifications);
+      Future.delayed(const Duration(seconds: 2), () {
+        motivational.checkAndTrigger(profile);
+      });
     }
   }
 

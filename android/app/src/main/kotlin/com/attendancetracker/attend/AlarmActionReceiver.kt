@@ -103,6 +103,7 @@ class AlarmActionReceiver : BroadcastReceiver() {
 
             widgetPrefs.edit().apply {
                 putString("today_status", status)
+                putString("today_status_date", dateStr)
                 putString("today_time", timeStr)
                 putString("profile_name", profileName)
                 putString("present_count", presentCount.toString())
