@@ -109,8 +109,8 @@ class GPSAttendanceService extends ChangeNotifier {
         final arrivalHour = profile.reminderHour;
         final arrivalMin = profile.reminderMinute;
         final arrivalMinutes = arrivalHour * 60 + arrivalMin;
-        startMinutes = arrivalMinutes - 20;
-        cutoffMinutes = arrivalMinutes + 20;
+        startMinutes = arrivalMinutes - 30;
+        cutoffMinutes = arrivalMinutes + 30;
       } else {
         final start = _parseTime(loc.startTime);
         final cutoff = _parseTime(loc.cutoffTime);
@@ -175,8 +175,8 @@ class GPSAttendanceService extends ChangeNotifier {
         final arrivalHour = profile.reminderHour;
         final arrivalMin = profile.reminderMinute;
         final arrivalMinutes = arrivalHour * 60 + arrivalMin;
-        startMinutes = arrivalMinutes - 20;
-        cutoffMinutes = arrivalMinutes + 20;
+        startMinutes = arrivalMinutes - 30;
+        cutoffMinutes = arrivalMinutes + 30;
       } else {
         final start = _parseTime(loc.startTime);
         final cutoff = _parseTime(loc.cutoffTime);
@@ -465,7 +465,7 @@ class GPSAttendanceService extends ChangeNotifier {
         final arrivalHour = profile.reminderHour;
         final arrivalMin = profile.reminderMinute;
         final arrivalMinutes = arrivalHour * 60 + arrivalMin;
-        startMinutes = arrivalMinutes - 20;
+        startMinutes = arrivalMinutes - 30;
         lateMinutes = arrivalMinutes;
       } else {
         final start = _parseTime(location.startTime);
@@ -647,8 +647,8 @@ class GPSAttendanceService extends ChangeNotifier {
         final arrivalHour = profile.reminderHour;
         final arrivalMin = profile.reminderMinute;
         final arrivalMinutes = arrivalHour * 60 + arrivalMin;
-        startMin = arrivalMinutes - 20;
-        cutoffMin = arrivalMinutes + 20;
+        startMin = arrivalMinutes - 30;
+        cutoffMin = arrivalMinutes + 30;
       } else {
         final start = _parseTime(loc.startTime);
         final cutoff = _parseTime(loc.cutoffTime);
