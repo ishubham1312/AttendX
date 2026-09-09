@@ -42,7 +42,7 @@ class _AlarmCenterScreenState extends State<AlarmCenterScreen>
     return AnimatedBuilder(
       animation: anim,
       builder: (_, c) => Opacity(
-        opacity: anim.value,
+        opacity: anim.value.clamp(0.0, 1.0),
         child: Transform.translate(
           offset: Offset(0, 25 * (1 - anim.value)),
           child: c,
@@ -62,10 +62,7 @@ class _AlarmCenterScreenState extends State<AlarmCenterScreen>
       appBar: AppBar(
         title: const Text(
           'Alarm Center',
-          style: TextStyle(
-            fontWeight: FontWeight.w800,
-            letterSpacing: -0.5,
-          ),
+          style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: -0.5),
         ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
@@ -82,15 +79,29 @@ class _AlarmCenterScreenState extends State<AlarmCenterScreen>
                   index,
                   _AlarmCard(
                     alarm: alarms[index],
-                    onToggle: (enabled) {
-                      provider.toggleAlarm(alarms[index].id, enabled);
+                    onToggle: (enabled) async {
+                      try {
+                        if (enabled)
+                          await provider.notifications.requestPermissions();
+                        await provider.toggleAlarm(alarms[index].id, enabled);
+                      } catch (e) {
+                        if (context.mounted)
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Could not update alert: $e'),
+                            ),
+                          );
+                      }
                     },
-                    onEdit: () => _showAlarmEditor(context, provider,
-                        existing: alarms[index]),
+                    onEdit: () => _showAlarmEditor(
+                      context,
+                      provider,
+                      existing: alarms[index],
+                    ),
                     onDelete: alarms[index].isPrimary
                         ? null
-                        : () => _confirmDelete(
-                            context, provider, alarms[index]),
+                        : () =>
+                              _confirmDelete(context, provider, alarms[index]),
                   ),
                 );
               },
@@ -150,8 +161,11 @@ class _AlarmCenterScreenState extends State<AlarmCenterScreen>
     );
   }
 
-  void _showAlarmEditor(BuildContext context, AppProvider provider,
-      {AlarmItem? existing}) {
+  void _showAlarmEditor(
+    BuildContext context,
+    AppProvider provider, {
+    AlarmItem? existing,
+  }) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -160,39 +174,51 @@ class _AlarmCenterScreenState extends State<AlarmCenterScreen>
         existing: existing,
         onSave: (alarm) async {
           await provider.saveAlarm(alarm);
-          if (context.mounted) Navigator.pop(ctx);
+          if (ctx.mounted) Navigator.pop(ctx);
         },
       ),
     );
   }
 
   void _confirmDelete(
-      BuildContext context, AppProvider provider, AlarmItem alarm) {
+    BuildContext context,
+    AppProvider provider,
+    AlarmItem alarm,
+  ) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('Delete Alarm?',
-            style: TextStyle(fontWeight: FontWeight.w800)),
+        title: const Text(
+          'Delete Alarm?',
+          style: TextStyle(fontWeight: FontWeight.w800),
+        ),
         content: Text(
           'Are you sure you want to delete "${alarm.name}"? This action cannot be undone.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel',
-                style: TextStyle(
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Cancel',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
           TextButton(
             onPressed: () async {
               await provider.deleteAlarm(alarm.id);
               if (context.mounted) Navigator.pop(context);
             },
-            child: const Text('Delete',
-                style: TextStyle(
-                    color: AppColors.absent, fontWeight: FontWeight.w700)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(
+                color: AppColors.absent,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ),
@@ -281,7 +307,9 @@ class _AlarmCard extends StatelessWidget {
                                     height: 32,
                                     decoration: BoxDecoration(
                                       color: isEnabled
-                                          ? AppColors.forestGreen.withValues(alpha: 0.08)
+                                          ? AppColors.forestGreen.withValues(
+                                              alpha: 0.08,
+                                            )
                                           : Colors.grey.shade100,
                                       shape: BoxShape.circle,
                                     ),
@@ -298,36 +326,46 @@ class _AlarmCard extends StatelessWidget {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
-                                            Text(
-                                              alarm.name,
-                                              style: TextStyle(
-                                                fontSize: 14,
-                                                fontWeight: FontWeight.w800,
-                                                color: isEnabled
-                                                    ? AppColors.textPrimary
-                                                    : AppColors.textSubtle,
-                                                letterSpacing: -0.2,
+                                            Flexible(
+                                              child: Text(
+                                                alarm.name,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: isEnabled
+                                                      ? AppColors.textPrimary
+                                                      : AppColors.textSubtle,
+                                                  letterSpacing: -0.2,
+                                                ),
                                               ),
                                             ),
                                             if (alarm.isPrimary) ...[
                                               const SizedBox(width: 8),
                                               Container(
-                                                padding: const EdgeInsets.symmetric(
-                                                    horizontal: 8, vertical: 3),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 3,
+                                                    ),
                                                 decoration: BoxDecoration(
                                                   color: AppColors.forestGreen
                                                       .withValues(alpha: 0.08),
-                                                  borderRadius: BorderRadius.circular(10),
+                                                  borderRadius:
+                                                      BorderRadius.circular(10),
                                                 ),
                                                 child: const Text(
                                                   'Primary',
                                                   style: TextStyle(
                                                     fontSize: 9,
-                                                    color: AppColors.forestGreen,
+                                                    color:
+                                                        AppColors.forestGreen,
                                                     fontWeight: FontWeight.w800,
                                                   ),
                                                 ),
@@ -381,7 +419,10 @@ class _AlarmCard extends StatelessWidget {
                                   size: 20,
                                 ),
                                 constraints: const BoxConstraints(),
-                                padding: const EdgeInsets.only(top: 8, right: 8),
+                                padding: const EdgeInsets.only(
+                                  top: 8,
+                                  right: 8,
+                                ),
                               ),
                           ],
                         ),
@@ -389,10 +430,7 @@ class _AlarmCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                     // Divider
-                    Container(
-                      height: 1,
-                      color: Colors.grey.shade100,
-                    ),
+                    Container(height: 1, color: Colors.grey.shade100),
                     const SizedBox(height: 14),
                     // Bottom Row: Details and Repeat Representation
                     Row(
@@ -403,7 +441,9 @@ class _AlarmCard extends StatelessWidget {
                             ? _buildRepeatDaysRow(alarm.repeatDays, isEnabled)
                             : Container(
                                 padding: const EdgeInsets.symmetric(
-                                    horizontal: 10, vertical: 5),
+                                  horizontal: 10,
+                                  vertical: 5,
+                                ),
                                 decoration: BoxDecoration(
                                   color: Colors.grey.shade100,
                                   borderRadius: BorderRadius.circular(8),
@@ -434,7 +474,9 @@ class _AlarmCard extends StatelessWidget {
                         // Category pill
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: alarm.isPrimary
                                 ? AppColors.forestGreen.withValues(alpha: 0.05)
@@ -442,7 +484,9 @@ class _AlarmCard extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
-                            alarm.isPrimary ? 'Arrival Alarm' : 'Custom Alarm',
+                            alarm.alertMode == AlertMode.alarm
+                                ? 'Ringing alarm'
+                                : 'Notification',
                             style: TextStyle(
                               fontSize: 10.5,
                               fontWeight: FontWeight.w700,
@@ -485,13 +529,15 @@ class _AlarmCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: isActiveDay
                 ? (isEnabled
-                    ? AppColors.forestGreen.withValues(alpha: 0.1)
-                    : Colors.grey.shade200)
+                      ? AppColors.forestGreen.withValues(alpha: 0.1)
+                      : Colors.grey.shade200)
                 : Colors.transparent,
             shape: BoxShape.circle,
             border: Border.all(
               color: isActiveDay
-                  ? (isEnabled ? AppColors.forestGreen.withValues(alpha: 0.2) : Colors.grey.shade300)
+                  ? (isEnabled
+                        ? AppColors.forestGreen.withValues(alpha: 0.2)
+                        : Colors.grey.shade300)
                   : Colors.grey.shade100,
               width: 1,
             ),
@@ -503,7 +549,9 @@ class _AlarmCard extends StatelessWidget {
                 fontSize: 9.5,
                 fontWeight: FontWeight.w800,
                 color: isActiveDay
-                    ? (isEnabled ? AppColors.forestGreen : AppColors.textSecondary)
+                    ? (isEnabled
+                          ? AppColors.forestGreen
+                          : AppColors.textSecondary)
                     : AppColors.textSubtle,
               ),
             ),
@@ -520,10 +568,7 @@ class _AlarmEditorSheet extends StatefulWidget {
   final AlarmItem? existing;
   final Future<void> Function(AlarmItem alarm) onSave;
 
-  const _AlarmEditorSheet({
-    this.existing,
-    required this.onSave,
-  });
+  const _AlarmEditorSheet({this.existing, required this.onSave});
 
   @override
   State<_AlarmEditorSheet> createState() => _AlarmEditorSheetState();
@@ -535,16 +580,20 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
   late bool _isRepeating;
   late List<int> _repeatDays;
   bool _saving = false;
+  late AlertMode _alertMode;
+  late int _followUpMinutes;
 
   @override
   void initState() {
     super.initState();
     final e = widget.existing;
+    _alertMode = e?.alertMode ?? AlertMode.notification;
+    _followUpMinutes = e?.followUpMinutes ?? 30;
     _nameCtrl = TextEditingController(text: e?.name ?? '');
     _time = e != null
         ? TimeOfDay(hour: e.hour, minute: e.minute)
         : const TimeOfDay(hour: 9, minute: 0);
-    _isRepeating = e?.isRepeating ?? true;
+    _isRepeating = (e?.isPrimary ?? false) || (e?.isRepeating ?? true);
     _repeatDays = e != null ? List<int>.from(e.repeatDays) : [1, 2, 3, 4, 5, 6];
   }
 
@@ -555,11 +604,8 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
   }
 
   Future<void> _pickTime() async {
-    final picked = await showTimePicker(
-      context: context,
-      initialTime: _time,
-    );
-    if (picked != null) setState(() => _time = picked);
+    final picked = await showTimePicker(context: context, initialTime: _time);
+    if (picked != null && mounted) setState(() => _time = picked);
   }
 
   Future<void> _save() async {
@@ -574,10 +620,17 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
       return;
     }
 
+    if (_isRepeating && _repeatDays.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select at least one repeat day.')),
+      );
+      return;
+    }
     setState(() => _saving = true);
 
     final alarm = AlarmItem(
-      id: widget.existing?.id ??
+      id:
+          widget.existing?.id ??
           'alarm_${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       hour: _time.hour,
@@ -587,10 +640,26 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
       repeatDays: _repeatDays,
       type: widget.existing?.type ?? AlarmType.custom,
       linkedProfileId: widget.existing?.linkedProfileId,
+      alertMode: _alertMode,
+      followUpMinutes: _followUpMinutes,
     );
 
-    await widget.onSave(alarm);
-    setState(() => _saving = false);
+    try {
+      final notifications = context.read<AppProvider>().notifications;
+      await notifications.requestPermissions();
+      if (_alertMode == AlertMode.alarm &&
+          !await notifications.isExactAlarmPermissionGranted()) {
+        await notifications.requestExactAlarmPermission();
+      }
+      await widget.onSave(alarm);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Could not save alert: $e')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -604,7 +673,11 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
       ),
       padding: EdgeInsets.fromLTRB(
-          24, 16, 24, MediaQuery.of(context).viewInsets.bottom + 28),
+        24,
+        16,
+        24,
+        MediaQuery.of(context).viewInsets.bottom + 28,
+      ),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -714,12 +787,94 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
                       fontWeight: FontWeight.w500,
                     ),
                     border: InputBorder.none,
-                    contentPadding:
-                        EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
+            ],
+
+            const Text(
+              'Alert type',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 8),
+            SegmentedButton<AlertMode>(
+              segments: const [
+                ButtonSegment(
+                  value: AlertMode.alarm,
+                  label: Text('Alarm'),
+                  icon: Icon(Icons.alarm),
+                ),
+                ButtonSegment(
+                  value: AlertMode.notification,
+                  label: Text('Notification'),
+                  icon: Icon(Icons.notifications_outlined),
+                ),
+              ],
+              selected: {_alertMode},
+              onSelectionChanged: (values) =>
+                  setState(() => _alertMode = values.first),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _alertMode == AlertMode.alarm
+                  ? 'Rings for up to 60 seconds. Tap, dismiss, or mark attendance to stop. Uses your alarm volume and system notification settings.'
+                  : 'A standard notification, without a repeating alarm sound.',
+              style: const TextStyle(
+                fontSize: 12,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Allow notifications in system settings. For on-time alerts, allow Alarms & reminders; otherwise Android may delay delivery.',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            TextButton.icon(
+              onPressed: () => context
+                  .read<AppProvider>()
+                  .notifications
+                  .requestExactAlarmPermission(),
+              icon: const Icon(Icons.settings_outlined),
+              label: const Text('Alarms & reminders permission'),
+            ),
+            if (isPrimary) ...[
+              DropdownButtonFormField<int>(
+                initialValue: _followUpMinutes,
+                decoration: const InputDecoration(
+                  labelText: 'Remind me if still unmarked',
+                ),
+                isExpanded: true,
+                items: {0, 15, 30, 60, 120, _followUpMinutes}
+                    .map(
+                      (minutes) => DropdownMenuItem(
+                        value: minutes,
+                        child: Text(
+                          minutes == 0
+                              ? 'No follow-up'
+                              : '$minutes minutes after main alert',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) =>
+                    setState(() => _followUpMinutes = value ?? 30),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: Text(
+                  'One notification only if still unmarked. Any attendance status stops it. Follow-ups never carry into the next day.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ),
             ],
 
             // Repeat toggle
@@ -753,7 +908,9 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
                   ),
                   Switch(
                     value: _isRepeating,
-                    onChanged: (v) => setState(() => _isRepeating = v),
+                    onChanged: isPrimary
+                        ? null
+                        : (v) => setState(() => _isRepeating = v),
                     activeThumbColor: Colors.white,
                     activeTrackColor: AppColors.forestGreen,
                     inactiveThumbColor: Colors.grey.shade400,
@@ -844,9 +1001,7 @@ class _AlarmEditorSheetState extends State<_AlarmEditorSheet> {
               color: selected ? AppColors.forestGreen : Colors.white,
               shape: BoxShape.circle,
               border: Border.all(
-                color: selected
-                    ? AppColors.forestGreen
-                    : Colors.grey.shade200,
+                color: selected ? AppColors.forestGreen : Colors.grey.shade200,
                 width: 1.5,
               ),
               boxShadow: selected

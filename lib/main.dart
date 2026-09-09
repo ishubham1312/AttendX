@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'package:home_widget/home_widget.dart';
-import 'package:geolocator/geolocator.dart';
 
 import 'theme/app_theme.dart';
 import 'models/attendance_status.dart';
@@ -27,20 +26,8 @@ Future<void> main() async {
 
   final notifications = NotificationService();
   await notifications.init();
-  unawaited(notifications.requestPermissions());
-  unawaited(
-    Future(() async {
-      try {
-        final permission = await Geolocator.checkPermission();
-        if (permission == LocationPermission.denied) {
-          await Geolocator.requestPermission();
-        }
-      } catch (_) {}
-    }),
-  );
-
-  final provider = AppProvider(storage, notifications, alarmStorage)..load();
-  await provider.gpsAttendance.requestLocationPermission();
+  final provider = AppProvider(storage, notifications, alarmStorage);
+  await provider.load();
 
   notifications.onAction = (profileId, actionId) async {
     final today = DateTime.now();
@@ -116,7 +103,7 @@ class _EntryState extends State<_Entry> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      context.read<AppProvider>().checkAndApplyPendingAttendance();
+      context.read<AppProvider>().refreshBackgroundState();
     }
   }
 

@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/profile.dart';
 import '../models/attendance_status.dart';
 import '../models/attendance_location.dart';
@@ -20,8 +19,9 @@ class GPSAttendanceService extends ChangeNotifier {
   Position? _currentPosition;
   bool _isInside = false;
   double _distanceToWorkplace = -1; // in meters
-  String _gpsStatus = 'Unknown'; // 'Disabled', 'PermissionMissing', 'BackgroundMissing', 'Active'
-  
+  String _gpsStatus =
+      'Unknown'; // 'Disabled', 'PermissionMissing', 'BackgroundMissing', 'Active'
+
   // Anti-fraud and status logs
   final List<String> _fraudLogs = [];
   Position? _lastCheckedPosition;
@@ -39,7 +39,6 @@ class GPSAttendanceService extends ChangeNotifier {
   Timer? _deadlineTimer;
   StreamSubscription<Position>? _positionStreamSub;
   String? _activeProfileId;
-  DateTime? _lastFailureNotificationTime;
 
   // Getters
   bool get isTracking => _isTracking;
@@ -61,7 +60,12 @@ class GPSAttendanceService extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateSimulatedLocation(double lat, double lng, {double accuracy = 15.0, bool isMocked = false}) {
+  void updateSimulatedLocation(
+    double lat,
+    double lng, {
+    double accuracy = 15.0,
+    bool isMocked = false,
+  }) {
     _simulatedLat = lat;
     _simulatedLng = lng;
     _simulatedAccuracy = accuracy;
@@ -90,14 +94,16 @@ class GPSAttendanceService extends ChangeNotifier {
     if (profile.locations.isEmpty) return false;
 
     final today = DateTime.now();
-    final dateKey = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-    if (today.weekday == DateTime.sunday || profile.holidays.contains(dateKey)) {
+    final dateKey =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+    if (today.weekday == DateTime.sunday ||
+        profile.holidays.contains(dateKey)) {
       return false;
     }
 
     final dateKeyDate = DateTime(today.year, today.month, today.day);
     final existingRaw = storage.getStatusRaw(profile.id, dateKeyDate);
-    if (existingRaw != null && existingRaw.startsWith('present')) {
+    if (existingRaw != null) {
       return false; // Present is already marked, stop tracking
     }
 
@@ -149,8 +155,10 @@ class GPSAttendanceService extends ChangeNotifier {
     }
 
     final today = DateTime.now();
-    final dateKey = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-    if (today.weekday == DateTime.sunday || profile.holidays.contains(dateKey)) {
+    final dateKey =
+        "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+    if (today.weekday == DateTime.sunday ||
+        profile.holidays.contains(dateKey)) {
       if (_isTracking) stopTracking();
       return;
     }
@@ -160,7 +168,7 @@ class GPSAttendanceService extends ChangeNotifier {
 
     // After Present is marked: Stop attendance reminders for that day. No further attendance notifications should be sent.
     // Also, if already marked Present, we don't need to track anymore today.
-    if (existingRaw != null && existingRaw.startsWith('present')) {
+    if (existingRaw != null) {
       if (_isTracking) stopTracking();
       return;
     }
@@ -213,7 +221,6 @@ class GPSAttendanceService extends ChangeNotifier {
       _isInside = false;
       _distanceToWorkplace = -1;
       notifyListeners();
-      _sendLocationDisabledNotification();
       return;
     }
 
@@ -287,7 +294,8 @@ class GPSAttendanceService extends ChangeNotifier {
       _gpsStatus = 'BackgroundMissing';
     }
     notifyListeners();
-    return permission == LocationPermission.always || permission == LocationPermission.whileInUse;
+    return permission == LocationPermission.always ||
+        permission == LocationPermission.whileInUse;
   }
 
   /// Start background/foreground tracking
@@ -297,7 +305,10 @@ class GPSAttendanceService extends ChangeNotifier {
 
     if (kIsWeb) {
       // Web fallback: use periodic polling timer
-      _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) => _checkLocation());
+      _pollingTimer = Timer.periodic(
+        const Duration(seconds: 5),
+        (_) => _checkLocation(),
+      );
     } else {
       // Mobile: listen to position stream with foreground notification config
       final locationSettings = AndroidSettings(
@@ -305,14 +316,17 @@ class GPSAttendanceService extends ChangeNotifier {
         distanceFilter: 5,
         intervalDuration: Duration(seconds: 10),
         foregroundNotificationConfig: ForegroundNotificationConfig(
-          notificationText: "AttendX is running background geofence verification.",
+          notificationText:
+              "AttendX is running background geofence verification.",
           notificationTitle: "Automatic Attendance Active",
           enableWakeLock: true,
         ),
       );
 
-      _positionStreamSub = Geolocator.getPositionStream(locationSettings: locationSettings)
-          .listen(
+      _positionStreamSub =
+          Geolocator.getPositionStream(
+            locationSettings: locationSettings,
+          ).listen(
             (Position pos) {
               if (!_simulationMode) {
                 _processPosition(pos);
@@ -324,9 +338,12 @@ class GPSAttendanceService extends ChangeNotifier {
               notifyListeners();
             },
           );
-      
+
       // Also start periodic timer to verify in background/web fallback
-      _pollingTimer = Timer.periodic(const Duration(seconds: 10), (_) => _checkLocation());
+      _pollingTimer = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => _checkLocation(),
+      );
     }
     _checkLocation();
     notifyListeners();
@@ -373,13 +390,16 @@ class GPSAttendanceService extends ChangeNotifier {
       }
 
       final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         _gpsStatus = 'PermissionMissing';
         notifyListeners();
         return;
       }
 
-      _gpsStatus = permission == LocationPermission.whileInUse ? 'BackgroundMissing' : 'Active';
+      _gpsStatus = permission == LocationPermission.whileInUse
+          ? 'BackgroundMissing'
+          : 'Active';
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: LocationSettings(
@@ -396,11 +416,13 @@ class GPSAttendanceService extends ChangeNotifier {
   /// Process the updated position
   void _processPosition(Position position) {
     _currentPosition = position;
-    
+
     // Find active profile
     if (_activeProfileId == null) return;
-    final profile = storage.getProfiles().firstWhere((p) => p.id == _activeProfileId);
-    
+    final profile = storage.getProfiles().firstWhere(
+      (p) => p.id == _activeProfileId,
+    );
+
     if (profile.locations.isEmpty) {
       _isInside = false;
       _distanceToWorkplace = -1;
@@ -433,9 +455,17 @@ class GPSAttendanceService extends ChangeNotifier {
 
     // Check transition entry/exit alerts
     if (_isInside && !wasInside) {
-      _sendNotification(90001, "📍 Location Entered", "Welcome! You have entered your attendance area: ${closestLocation.name}.");
+      _sendNotification(
+        90001,
+        "📍 Location Entered",
+        "Welcome! You have entered your attendance area: ${closestLocation.name}.",
+      );
     } else if (!_isInside && wasInside) {
-      _sendNotification(90002, "📍 Location Exited", "You have left your attendance area: ${closestLocation.name}.");
+      _sendNotification(
+        90002,
+        "📍 Location Exited",
+        "You have left your attendance area: ${closestLocation.name}.",
+      );
     }
 
     notifyListeners();
@@ -447,7 +477,11 @@ class GPSAttendanceService extends ChangeNotifier {
   }
 
   /// Try to mark attendance automatically
-  void _attemptAutoMark(Profile profile, AttendanceLocation location, Position position) async {
+  void _attemptAutoMark(
+    Profile profile,
+    AttendanceLocation location,
+    Position position,
+  ) async {
     final today = DateTime.now();
     final dateKey = DateTime(today.year, today.month, today.day);
     final nowTime = TimeOfDay.fromDateTime(today);
@@ -471,7 +505,9 @@ class GPSAttendanceService extends ChangeNotifier {
         final start = _parseTime(location.startTime);
         final cutoff = _parseTime(location.cutoffTime);
         startMinutes = start != null ? (start.hour * 60 + start.minute) : 0;
-        lateMinutes = cutoff != null ? (cutoff.hour * 60 + cutoff.minute) : 1440;
+        lateMinutes = cutoff != null
+            ? (cutoff.hour * 60 + cutoff.minute)
+            : 1440;
       }
 
       if (nowMinutes < startMinutes) {
@@ -493,7 +529,9 @@ class GPSAttendanceService extends ChangeNotifier {
       // A. GPS Accuracy Check
       const minAccuracyThreshold = 50.0; // max allowed 50 meters inaccuracy
       if (position.accuracy > minAccuracyThreshold) {
-        _fraudLogs.add("Accuracy validation failed: ${position.accuracy.toStringAsFixed(1)}m (limit is ${minAccuracyThreshold}m)");
+        _fraudLogs.add(
+          "Accuracy validation failed: ${position.accuracy.toStringAsFixed(1)}m (limit is ${minAccuracyThreshold}m)",
+        );
       }
 
       // B. Mock Location Check
@@ -513,7 +551,9 @@ class GPSAttendanceService extends ChangeNotifier {
         if (timeDiffSec > 0) {
           final speedKmh = (dist / timeDiffSec) * 3.6;
           if (speedKmh > 300 && dist > 500) {
-            _fraudLogs.add("Sudden location jump detected: ${speedKmh.toStringAsFixed(1)} km/h.");
+            _fraudLogs.add(
+              "Sudden location jump detected: ${speedKmh.toStringAsFixed(1)} km/h.",
+            );
           }
         }
       }
@@ -531,7 +571,8 @@ class GPSAttendanceService extends ChangeNotifier {
       final entry = AttendanceEntry(AttendanceStatus.present);
       await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
 
-      final timeStr = "${today.hour.toString().padLeft(2, '0')}:${today.minute.toString().padLeft(2, '0')}";
+      final timeStr =
+          "${today.hour.toString().padLeft(2, '0')}:${today.minute.toString().padLeft(2, '0')}";
       // Save metadata
       final metadata = {
         'timestamp': today.millisecondsSinceEpoch,
@@ -550,7 +591,7 @@ class GPSAttendanceService extends ChangeNotifier {
       await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
 
       // Cancel pending reminders
-      notifications.cancel(profile.id.hashCode);
+      // Native storage suppresses reminders without cancelling future days.
 
       // Trigger Success Notification
       final statusLabel = isLate ? "Late" : "Present";
@@ -564,7 +605,10 @@ class GPSAttendanceService extends ChangeNotifier {
       notifyListeners();
 
       // Trigger motivational check
-      final motivational = MotivationalNotificationService(storage, notifications);
+      final motivational = MotivationalNotificationService(
+        storage,
+        notifications,
+      );
       Future.delayed(const Duration(seconds: 2), () {
         motivational.checkAndTrigger(profile);
       });
@@ -573,19 +617,20 @@ class GPSAttendanceService extends ChangeNotifier {
       if (existingMetadata != null && existingRaw.startsWith('present')) {
         final arrivalStr = existingMetadata['arrivalTime'] as String?;
         if (arrivalStr != null) {
-          final timeStr = "${today.hour.toString().padLeft(2, '0')}:${today.minute.toString().padLeft(2, '0')}";
-          
+          final timeStr =
+              "${today.hour.toString().padLeft(2, '0')}:${today.minute.toString().padLeft(2, '0')}";
+
           // Calculate duration between arrivalStr and now
           final parts = arrivalStr.split(':');
           final arrHour = int.parse(parts[0]);
           final arrMin = int.parse(parts[1]);
-          
+
           final nowHour = today.hour;
           final nowMin = today.minute;
-          
+
           int totalMins = (nowHour * 60 + nowMin) - (arrHour * 60 + arrMin);
           if (totalMins < 0) totalMins = 0;
-          
+
           final hrs = totalMins ~/ 60;
           final mins = totalMins % 60;
           final durationStr = hrs > 0 ? "${hrs}h ${mins}m" : "${mins}m";
@@ -594,8 +639,12 @@ class GPSAttendanceService extends ChangeNotifier {
           final updatedMetadata = Map<String, dynamic>.from(existingMetadata);
           updatedMetadata['departureTime'] = timeStr;
           updatedMetadata['duration'] = durationStr;
-          
-          await storage.setAttendanceMetadata(profile.id, dateKey, updatedMetadata);
+
+          await storage.setAttendanceMetadata(
+            profile.id,
+            dateKey,
+            updatedMetadata,
+          );
           notifyListeners();
         }
       }
@@ -605,187 +654,15 @@ class GPSAttendanceService extends ChangeNotifier {
   /// Periodic checks for missed deadlines (Absent detection) & reminders
   void _startDeadlineChecks() {
     _deadlineTimer?.cancel();
-    _deadlineTimer = Timer.periodic(const Duration(minutes: 1), (_) => _runScheduledAlerts());
+    _deadlineTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _runScheduledAlerts(),
+    );
   }
 
-  /// Run alerts for the active profile
-  void _runScheduledAlerts() async {
-    if (_activeProfileId == null) return;
-    
-    // Get profile
-    final profile = storage.getProfiles().firstWhere((p) => p.id == _activeProfileId);
-    
-    // Update tracking state: starts or stops tracking based on current window/status
+  /// Native alarms own reminders; this timer only manages live GPS tracking.
+  void _runScheduledAlerts() {
     updateTrackingState();
-
-    if (profile.locations.isEmpty) return;
-
-    final today = DateTime.now();
-    
-    // Check if sunday or holiday
-    final dateKey = DateTime(today.year, today.month, today.day);
-    final dateKeyStr = "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-    if (today.weekday == DateTime.sunday || profile.holidays.contains(dateKeyStr)) {
-      return; // Skip alerts on holidays/sundays
-    }
-
-    final existing = storage.getStatusRaw(profile.id, dateKey);
-    if (existing != null) {
-      return; // Already marked today
-    }
-
-    final nowTime = TimeOfDay.fromDateTime(today);
-    final nowMin = nowTime.hour * 60 + nowTime.minute;
-
-    // Process closest location timing
-    for (final loc in profile.locations) {
-      int startMin;
-      int cutoffMin;
-      
-      final hasCustom = loc.startTime != null && loc.cutoffTime != null;
-      if (!hasCustom) {
-        final arrivalHour = profile.reminderHour;
-        final arrivalMin = profile.reminderMinute;
-        final arrivalMinutes = arrivalHour * 60 + arrivalMin;
-        startMin = arrivalMinutes - 30;
-        cutoffMin = arrivalMinutes + 30;
-      } else {
-        final start = _parseTime(loc.startTime);
-        final cutoff = _parseTime(loc.cutoffTime);
-        startMin = start != null ? (start.hour * 60 + start.minute) : 0;
-        cutoffMin = cutoff != null ? (cutoff.hour * 60 + cutoff.minute) : 1440;
-      }
-
-      // 1. Failure Alarm Check during the attendance window
-      if (nowMin >= startMin && nowMin <= cutoffMin) {
-        final permission = await Geolocator.checkPermission();
-        final gpsEnabled = await Geolocator.isLocationServiceEnabled();
-        
-        bool permissionDenied = permission == LocationPermission.denied || permission == LocationPermission.deniedForever;
-        bool gpsDisabled = !gpsEnabled;
-        bool locationUnavailable = _currentPosition == null;
-        
-        bool geofenceFailed = false;
-        if (_lastCheckedTime != null) {
-          final timeSinceLastCheck = today.difference(_lastCheckedTime!).inMinutes;
-          if (timeSinceLastCheck > 10) { // No location check succeeded in 10 minutes
-            geofenceFailed = true;
-          }
-        } else {
-          // If we have been in the window for more than 5 minutes and haven't checked location
-          if (nowMin - startMin > 5) {
-            geofenceFailed = true;
-          }
-        }
-
-        if (permissionDenied || gpsDisabled || locationUnavailable || geofenceFailed) {
-          // Trigger alarm notification (with quick action buttons to let them mark manually)
-          final lastNotificationTime = _lastFailureNotificationTime;
-          if (lastNotificationTime == null || today.difference(lastNotificationTime).inMinutes >= 15) {
-            _lastFailureNotificationTime = today;
-
-            String alertBody = "";
-            if (gpsDisabled) {
-              alertBody = "GPS is disabled. Please turn on location services to verify attendance.";
-            } else if (permissionDenied) {
-              alertBody = "Location permission is denied. Auto-attendance cannot verify your location.";
-            } else if (locationUnavailable) {
-              alertBody = "Location is unavailable. Please check your signal or connection.";
-            } else {
-              alertBody = "Geofence detection failed. Please verify attendance manually.";
-            }
-
-            _sendNotificationWithActions(
-              90025,
-              "⚠️ Attendance Verification Alarm",
-              alertBody,
-              const [
-                AndroidNotificationAction('ACTION_PRESENT', 'Present'),
-                AndroidNotificationAction('ACTION_HALF', 'Half Day'),
-                AndroidNotificationAction('ACTION_ABSENT', 'Absent'),
-              ],
-            );
-          }
-        }
-      }
-
-      // 2. Absent Detection: If current time is past cutoff time and user never entered
-      if (hasCustom) {
-        if (nowMin > cutoffMin && nowMin < cutoffMin + 5) {
-          // Just passed cutoff time! Mark absent
-          final entry = AttendanceEntry(AttendanceStatus.absent);
-          await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
-
-          final metadata = {
-            'timestamp': today.millisecondsSinceEpoch,
-            'latitude': _currentPosition?.latitude ?? 0.0,
-            'longitude': _currentPosition?.longitude ?? 0.0,
-            'accuracy': _currentPosition?.accuracy ?? 0.0,
-            'method': 'GPS Auto Marked',
-            'locationName': loc.name,
-            'gpsVerified': false,
-            'reason': 'Attendance window closed. User was not detected inside the geofence area.',
-          };
-          await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
-
-          _sendNotification(
-            90004,
-            "❌ Attendance Missed",
-            "Attendance window has closed. You were not detected within the ${loc.name} area.",
-          );
-          notifyListeners();
-
-          // Trigger motivational check
-          final motivational = MotivationalNotificationService(storage, notifications);
-          Future.delayed(const Duration(seconds: 2), () {
-            motivational.checkAndTrigger(profile);
-          });
-          return;
-        }
-
-        // 3. Escalating reminders before cutoff
-        final diff = cutoffMin - nowMin;
-        if (diff == 60) {
-          _sendNotification(90010, "⏰ Attendance Reminder", "You have not reached your attendance location yet.");
-        } else if (diff == 30) {
-          _sendNotification(90011, "⏰ Deadline Approaching", "Attendance deadline is approaching.");
-        } else if (diff == 15) {
-          _sendNotification(90012, "⏰ Attendance Warning", "You are still outside the attendance area.");
-        } else if (diff == 5) {
-          _sendNotification(90013, "⚠️ Critical Attendance Alert", "Attendance may be marked absent if you do not arrive soon.");
-        }
-      }
-    }
-
-    // 4. Global 2 PM Auto-Absent deadline for all profiles
-    if (nowTime.hour >= 14) {
-      final entry = AttendanceEntry(AttendanceStatus.absent);
-      await storage.setStatusRaw(profile.id, dateKey, entry.toStorage());
-
-      final metadata = {
-        'timestamp': today.millisecondsSinceEpoch,
-        'latitude': _currentPosition?.latitude ?? 0.0,
-        'longitude': _currentPosition?.longitude ?? 0.0,
-        'accuracy': _currentPosition?.accuracy ?? 0.0,
-        'method': 'Auto Marked Absent (2 PM Deadline)',
-        'gpsVerified': false,
-        'reason': 'User did not mark attendance by 2 PM deadline.',
-      };
-      await storage.setAttendanceMetadata(profile.id, dateKey, metadata);
-
-      _sendNotification(
-        90004,
-        "❌ Attendance Marked Absent",
-        "Attendance marked absent automatically as 2 PM deadline passed.",
-      );
-      notifyListeners();
-
-      // Trigger motivational check
-      final motivational = MotivationalNotificationService(storage, notifications);
-      Future.delayed(const Duration(seconds: 2), () {
-        motivational.checkAndTrigger(profile);
-      });
-    }
   }
 
   /// Parse time helper
@@ -803,7 +680,10 @@ class GPSAttendanceService extends ChangeNotifier {
         return TimeOfDay(hour: hour, minute: minute);
       } else {
         final parts = clean.split(':');
-        return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+        return TimeOfDay(
+          hour: int.parse(parts[0]),
+          minute: int.parse(parts[1]),
+        );
       }
     } catch (_) {
       return null;
@@ -817,27 +697,6 @@ class GPSAttendanceService extends ChangeNotifier {
       title: title,
       body: body,
       payload: _activeProfileId,
-    );
-  }
-
-  /// Send location services disabled warning
-  void _sendLocationDisabledNotification() {
-    notifications.showNotification(
-      id: 90020,
-      title: "⚠️ Location Services Disabled",
-      body: "Location services are disabled. Attendance cannot be verified.",
-      payload: _activeProfileId,
-    );
-  }
-
-  /// Helper to send notifications with action buttons
-  void _sendNotificationWithActions(int id, String title, String body, List<AndroidNotificationAction> actions) {
-    notifications.showNotification(
-      id: id,
-      title: title,
-      body: body,
-      payload: _activeProfileId,
-      actions: actions,
     );
   }
 

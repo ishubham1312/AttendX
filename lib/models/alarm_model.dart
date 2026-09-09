@@ -9,6 +9,18 @@ class AlarmItem {
   List<int> repeatDays; // 1=Mon, 2=Tue, ... 7=Sun
   final AlarmType type;
   String? linkedProfileId;
+  AlertMode alertMode;
+  int followUpMinutes;
+
+  static int notificationId(String value) {
+    var hash = 0;
+    for (final unit in value.codeUnits) {
+      hash = (hash * 31 + unit) & 0x7fffffff;
+    }
+    return hash;
+  }
+
+  int get nativeId => notificationId(id);
 
   AlarmItem({
     required this.id,
@@ -20,6 +32,8 @@ class AlarmItem {
     this.repeatDays = const [1, 2, 3, 4, 5, 6], // Mon-Sat by default
     this.type = AlarmType.custom,
     this.linkedProfileId,
+    this.alertMode = AlertMode.notification,
+    this.followUpMinutes = 30,
   });
 
   bool get isPrimary => type == AlarmType.primary;
@@ -34,7 +48,9 @@ class AlarmItem {
     if (!isRepeating) return 'Once';
     if (repeatDays.length == 7) return 'Every day';
     if (repeatDays.length == 6 && !repeatDays.contains(7)) return 'Mon - Sat';
-    if (repeatDays.length == 5 && !repeatDays.contains(6) && !repeatDays.contains(7)) {
+    if (repeatDays.length == 5 &&
+        !repeatDays.contains(6) &&
+        !repeatDays.contains(7)) {
       return 'Weekdays';
     }
     const dayNames = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -42,35 +58,41 @@ class AlarmItem {
   }
 
   Map<String, dynamic> toMap() => {
-        'id': id,
-        'name': name,
-        'hour': hour,
-        'minute': minute,
-        'isEnabled': isEnabled,
-        'isRepeating': isRepeating,
-        'repeatDays': repeatDays,
-        'type': type.name,
-        'linkedProfileId': linkedProfileId,
-      };
+    'id': id,
+    'name': name,
+    'hour': hour,
+    'minute': minute,
+    'isEnabled': isEnabled,
+    'isRepeating': isRepeating,
+    'repeatDays': repeatDays,
+    'type': type.name,
+    'linkedProfileId': linkedProfileId,
+    'alertMode': alertMode.name,
+    'followUpMinutes': followUpMinutes,
+  };
 
   factory AlarmItem.fromMap(Map<dynamic, dynamic> map) => AlarmItem(
-        id: map['id'] as String,
-        name: map['name'] as String? ?? 'Alarm',
-        hour: (map['hour'] as int?) ?? 9,
-        minute: (map['minute'] as int?) ?? 0,
-        isEnabled: map['isEnabled'] as bool? ?? true,
-        isRepeating: map['isRepeating'] as bool? ?? true,
-        repeatDays: (map['repeatDays'] as List?)?.map((e) => e as int).toList() ??
-            [1, 2, 3, 4, 5, 6],
-        type: AlarmType.values.firstWhere(
-          (e) => e.name == (map['type'] as String? ?? 'custom'),
-          orElse: () => AlarmType.custom,
-        ),
-        linkedProfileId: map['linkedProfileId'] as String?,
-      );
+    id: map['id'] as String,
+    name: map['name'] as String? ?? 'Alarm',
+    hour: (map['hour'] as int?) ?? 9,
+    minute: (map['minute'] as int?) ?? 0,
+    isEnabled: map['isEnabled'] as bool? ?? true,
+    isRepeating: map['isRepeating'] as bool? ?? true,
+    repeatDays:
+        (map['repeatDays'] as List?)?.map((e) => e as int).toList() ??
+        [1, 2, 3, 4, 5, 6],
+    type: AlarmType.values.firstWhere(
+      (e) => e.name == (map['type'] as String? ?? 'custom'),
+      orElse: () => AlarmType.custom,
+    ),
+    linkedProfileId: map['linkedProfileId'] as String?,
+    alertMode: map['alertMode'] == 'alarm'
+        ? AlertMode.alarm
+        : AlertMode.notification,
+    followUpMinutes: ((map['followUpMinutes'] as int?) ?? 30).clamp(0, 180),
+  );
 }
 
-enum AlarmType {
-  primary,
-  custom,
-}
+enum AlarmType { primary, custom }
+
+enum AlertMode { alarm, notification }

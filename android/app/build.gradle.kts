@@ -16,6 +16,12 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Set GOOGLE_MAPS_API_KEY in the build environment or android/local.properties.
+// Restrict the key to this package/signing certificate and Maps SDK for Android.
+val localProperties = Properties()
+rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { localProperties.load(it) }
+val mapsApiKey = System.getenv("GOOGLE_MAPS_API_KEY") ?: localProperties.getProperty("GOOGLE_MAPS_API_KEY", "")
+
 android {
     namespace = "com.attendancetracker.attend"
     compileSdk = flutter.compileSdkVersion
@@ -35,11 +41,12 @@ android {
     defaultConfig {
         applicationId = "com.attendancetracker.attend"
         // flutter_local_notifications requires minSdk 21+.
-        minSdk = maxOf(flutter.minSdkVersion, 21)
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
         multiDexEnabled = true
+        manifestPlaceholders["googleMapsApiKey"] = mapsApiKey
     }
 
     signingConfigs {
@@ -69,6 +76,7 @@ flutter {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 

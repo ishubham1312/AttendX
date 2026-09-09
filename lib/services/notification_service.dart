@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
+import '../models/alarm_model.dart';
+import 'storage_service.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tzdata;
 
-typedef NotificationActionHandler = void Function(
-    String profileId, String actionId);
+typedef NotificationActionHandler =
+    void Function(String profileId, String actionId);
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
@@ -17,10 +19,12 @@ class NotificationService {
   static const String actionAbsent = 'ACTION_ABSENT';
   static const String actionHalf = 'ACTION_HALF';
 
-  static const _batteryChannel =
-      MethodChannel('com.attendancetracker.attend/battery');
-  static const _alarmChannel =
-      MethodChannel('com.attendancetracker.attend/alarm');
+  static const _batteryChannel = MethodChannel(
+    'com.attendancetracker.attend/battery',
+  );
+  static const _alarmChannel = MethodChannel(
+    'com.attendancetracker.attend/alarm',
+  );
 
   NotificationActionHandler? onAction;
 
@@ -82,17 +86,9 @@ class NotificationService {
       // 1. POST_NOTIFICATIONS (Android 13+)
       await _plugin
           .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin
+          >()
           ?.requestNotificationsPermission();
-
-      // 2. SCHEDULE_EXACT_ALARM (Android 12+)
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>()
-          ?.requestExactAlarmsPermission();
-
-      // Background execution is handled by smart platform behavior.
-      // Avoid forcing a battery optimization exemption prompt.
     } catch (e) {
       if (kDebugMode) debugPrint('Permission request failed: $e');
     }
@@ -103,8 +99,9 @@ class NotificationService {
   Future<bool> isBatteryOptimizationDisabled() async {
     if (kIsWeb) return true;
     try {
-      return await _batteryChannel
-              .invokeMethod<bool>('isBatteryOptimizationDisabled') ??
+      return await _batteryChannel.invokeMethod<bool>(
+            'isBatteryOptimizationDisabled',
+          ) ??
           false;
     } catch (_) {
       return false;
@@ -121,8 +118,9 @@ class NotificationService {
   Future<bool> isExactAlarmPermissionGranted() async {
     if (kIsWeb) return true;
     try {
-      return await _batteryChannel
-              .invokeMethod<bool>('isExactAlarmPermissionGranted') ??
+      return await _batteryChannel.invokeMethod<bool>(
+            'isExactAlarmPermissionGranted',
+          ) ??
           false;
     } catch (_) {
       return false;
@@ -138,31 +136,29 @@ class NotificationService {
 
   // ---- Scheduling ----
 
-  /// Schedule (or reschedule) a daily native alarm at [hour]:[minute].
-  Future<void> scheduleDailyReminder({
-    required int id,
-    required String profileId,
-    required String profileName,
-    required int hour,
-    required int minute,
-  }) async {
-    if (kIsWeb) return;
-    try {
-      await _alarmChannel.invokeMethod('scheduleAlarm', {
-        'id': id,
-        'profileId': profileId,
-        'profileName': profileName,
-        'hour': hour,
-        'minute': minute,
-        'isOneShot': false,
-      });
-      if (kDebugMode) {
-        debugPrint(
-            'Native daily alarm scheduled: "$profileName" at $hour:${minute.toString().padLeft(2, '0')}');
-      }
-    } catch (e) {
-      if (kDebugMode) debugPrint('scheduleDailyReminder failed: $e');
+  Future<void> scheduleAlarm(AlarmItem alarm, String profileName) async {
+    if (!StorageService.supportsNative) return;
+    if (!alarm.isEnabled) {
+      await cancel(alarm.nativeId);
+      return;
     }
+    await _alarmChannel.invokeMethod('scheduleAlarm', {
+      'id': alarm.nativeId,
+      'profileId': alarm.linkedProfileId ?? '',
+      'profileName': alarm.isPrimary ? profileName : alarm.name,
+      'hour': alarm.hour,
+      'minute': alarm.minute,
+      'isOneShot': !alarm.isRepeating,
+      'repeatDays': alarm.repeatDays,
+      'alertMode': alarm.alertMode.name,
+      'isPrimary': alarm.isPrimary,
+      'followUpMinutes': alarm.isPrimary ? alarm.followUpMinutes : 0,
+    });
+  }
+
+  Future<List<int>> completedAlarmIds() async {
+    if (!StorageService.supportsNative) return [];
+    return await _alarmChannel.invokeListMethod<int>('completedAlarms') ?? [];
   }
 
   /// Schedule a one-shot test alarm firing at [scheduledTime].
@@ -180,10 +176,13 @@ class NotificationService {
         'hour': scheduledTime.hour,
         'minute': scheduledTime.minute,
         'isOneShot': true,
+        'isPrimary': false,
+        'triggerAt': scheduledTime.millisecondsSinceEpoch,
       });
       if (kDebugMode) {
         debugPrint(
-            'Test alarm scheduled for "$profileName" at ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}');
+          'Test alarm scheduled for "$profileName" at ${scheduledTime.hour}:${scheduledTime.minute.toString().padLeft(2, '0')}',
+        );
       }
     } catch (e) {
       if (kDebugMode) debugPrint('scheduleTestNotification failed: $e');
