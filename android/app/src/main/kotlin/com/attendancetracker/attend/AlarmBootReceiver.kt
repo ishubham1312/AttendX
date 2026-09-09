@@ -3,16 +3,14 @@ package com.attendancetracker.attend
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 
 class AlarmBootReceiver : BroadcastReceiver() {
-    private val TAG = "AlarmBootReceiver"
+    private fun actionChanged(action: String?) = action == Intent.ACTION_TIME_CHANGED || action == Intent.ACTION_TIMEZONE_CHANGED
 
     override fun onReceive(context: Context, intent: Intent) {
-        val action = intent.action
-        Log.d(TAG, "Boot receiver received action: $action")
-        if (action == Intent.ACTION_BOOT_COMPLETED || action == "android.intent.action.QUICKBOOT_POWERON") {
-            AlarmScheduler.rescheduleAllAlarms(context)
+        if (intent.action != "com.attendancetracker.attend.REFRESH_WIDGETS" && intent.action != Intent.ACTION_DATE_CHANGED) {
+            AlarmScheduler.rescheduleAllAlarms(context, actionChanged(intent.action))
         }
+        WidgetHelper.refreshAll(context)
     }
 }

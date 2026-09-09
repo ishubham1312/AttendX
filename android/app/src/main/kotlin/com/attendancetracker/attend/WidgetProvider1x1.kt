@@ -13,6 +13,7 @@ class WidgetProvider1x1 : HomeWidgetProvider() {
         appWidgetIds: IntArray,
         widgetData: SharedPreferences
     ) {
+        AttendanceState.updateWidgetData(context)
         for (appWidgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_1x1)
             WidgetHelper.updateViews1x1(context, views, widgetData)

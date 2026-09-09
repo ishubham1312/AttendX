@@ -44,7 +44,7 @@ class AppProvider extends ChangeNotifier {
   final AlarmStorageService alarmStorage;
   late final GPSAttendanceService gpsAttendance;
   late final MotivationalNotificationService motivationalNotifications;
-  
+
   AttendanceStatus? _lastTodayStatus;
 
   AppProvider(this.storage, this.notifications, this.alarmStorage) {
@@ -59,7 +59,10 @@ class AppProvider extends ChangeNotifier {
         WidgetService.updateWidgets(this);
       }
     });
-    motivationalNotifications = MotivationalNotificationService(storage, notifications);
+    motivationalNotifications = MotivationalNotificationService(
+      storage,
+      notifications,
+    );
   }
 
   List<Profile> _profiles = [];
@@ -80,11 +83,13 @@ class AppProvider extends ChangeNotifier {
     );
   }
 
-  void load() {
+  Future<void> load() async {
+    await storage.importNativeAttendance();
     _profiles = storage.getProfiles();
-    _activeProfileId = storage.activeProfileId ??
+    _activeProfileId =
+        storage.activeProfileId ??
         (_profiles.isNotEmpty ? _profiles.first.id : null);
-    
+
     if (_activeProfileId != null) {
       gpsAttendance.init(_activeProfileId!);
     } else {
@@ -96,14 +101,11 @@ class AppProvider extends ChangeNotifier {
     _lastTodayStatus = entryFor(todayDate)?.status;
 
     notifyListeners();
-    WidgetService.updateWidgets(this);
-    // Re-schedule notifications for all profiles on every app launch
-    // so they survive app kills, reboots, and updates.
-    _rescheduleAllReminders();
-    checkAndApplyPendingAttendance();
-    // Ensure primary alarms exist for all profiles
+    await WidgetService.updateWidgets(this);
+    await checkAndApplyPendingAttendance();
     _ensurePrimaryAlarms();
-    _applyAutoAbsent();
+    await _rescheduleAllReminders();
+    await _applyAutoAbsent();
   }
 
   Future<void> _applyAutoAbsent() async {
@@ -112,7 +114,11 @@ class AppProvider extends ChangeNotifier {
     bool anyChanged = false;
 
     for (final p in _profiles) {
-      final start = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+      final start = DateTime(
+        p.startDate.year,
+        p.startDate.month,
+        p.startDate.day,
+      );
       var d = start;
       while (!d.isAfter(now)) {
         final dateKeyStr = _dateKey(d);
@@ -125,24 +131,8 @@ class AppProvider extends ChangeNotifier {
         }
 
         final isToday = dDate.isAtSameMomentAs(todayDate);
-        if (isToday) {
-          if (now.hour >= 14) {
-            final existing = storage.getStatusRaw(p.id, dDate);
-            if (existing == null) {
-              final entry = AttendanceEntry(AttendanceStatus.absent);
-              await storage.setStatusRaw(p.id, dDate, entry.toStorage());
-
-              final metadata = {
-                'timestamp': now.millisecondsSinceEpoch,
-                'method': 'Auto Marked Absent (2 PM Deadline)',
-                'gpsVerified': false,
-                'reason': 'User did not mark attendance by 2 PM deadline.',
-              };
-              await storage.setAttendanceMetadata(p.id, dDate, metadata);
-              anyChanged = true;
-            }
-          }
-        } else {
+        // Today stays pending so an automatic mark cannot suppress evening reminders.
+        if (!isToday) {
           final existing = storage.getStatusRaw(p.id, dDate);
           if (existing == null) {
             final entry = AttendanceEntry(AttendanceStatus.absent);
@@ -182,9 +172,18 @@ class AppProvider extends ChangeNotifier {
 
   Future<void> checkAndApplyPendingAttendance() async {
     try {
+      await storage.importNativeAttendance();
       final prefs = await SharedPreferences.getInstance();
-      final keys = prefs.getKeys().where((k) => k.startsWith('pending_attendance_')).toList();
-      if (keys.isEmpty) return;
+      await prefs.reload();
+      final keys = prefs
+          .getKeys()
+          .where((k) => k.startsWith('pending_attendance_'))
+          .toList();
+      if (keys.isEmpty) {
+        notifyListeners();
+        await WidgetService.updateWidgets(this);
+        return;
+      }
 
       bool changed = false;
       for (final key in keys) {
@@ -209,7 +208,9 @@ class AppProvider extends ChangeNotifier {
             }
             final entry = AttendanceEntry(
               status,
-              status == AttendanceStatus.halfDay ? (half ?? HalfType.firstHalf) : null,
+              status == AttendanceStatus.halfDay
+                  ? (half ?? HalfType.firstHalf)
+                  : null,
             );
             await storage.setStatusRaw(profileId, date, entry.toStorage());
             changed = true;
@@ -220,7 +221,8 @@ class AppProvider extends ChangeNotifier {
       if (changed) {
         // Reload locally to refresh UI & trigger widgets
         _profiles = storage.getProfiles();
-        _activeProfileId = storage.activeProfileId ??
+        _activeProfileId =
+            storage.activeProfileId ??
             (_profiles.isNotEmpty ? _profiles.first.id : null);
         notifyListeners();
         WidgetService.updateWidgets(this);
@@ -231,9 +233,34 @@ class AppProvider extends ChangeNotifier {
   }
 
   Future<void> _rescheduleAllReminders() async {
-    for (final p in _profiles) {
-      await _scheduleReminder(p);
+    final completed = await notifications.completedAlarmIds();
+    final migrated =
+        storage.settingsBox.get('nativeAlarmsV2', defaultValue: false) == true;
+    if (!migrated) {
+      for (final p in _profiles) {
+        await notifications.cancel(p.id.hashCode);
+      }
+      for (final alarm in getAlarms()) {
+        await notifications.cancel(alarm.id.hashCode);
+      }
+      await storage.settingsBox.put('nativeAlarmsV2', true);
     }
+    for (final alarm in getAlarms()) {
+      if (!alarm.isRepeating && completed.contains(alarm.nativeId)) {
+        alarm.isEnabled = false;
+        await alarmStorage.saveAlarm(alarm);
+      }
+      final profile = _profiles
+          .where((p) => p.id == alarm.linkedProfileId)
+          .firstOrNull;
+      await notifications.scheduleAlarm(alarm, profile?.name ?? alarm.name);
+    }
+  }
+
+  Future<void> refreshBackgroundState() async {
+    await checkAndApplyPendingAttendance();
+    await _rescheduleAllReminders();
+    gpsAttendance.updateTrackingState();
   }
 
   Future<void> completeOnboarding() async {
@@ -244,33 +271,40 @@ class AppProvider extends ChangeNotifier {
   // ---- Profiles ----
   Future<void> addProfile(Profile p, {bool makeActive = true}) async {
     await storage.saveProfile(p);
+    await notifications.requestPermissions();
     if (makeActive) {
       _activeProfileId = p.id;
       await storage.setActiveProfileId(p.id);
     }
-    await _scheduleReminder(p);
-    load();
+    await load();
   }
 
   Future<void> updateProfile(Profile p) async {
     await storage.saveProfile(p);
-    await _scheduleReminder(p);
     // Sync primary alarm time when profile reminder changes
     await alarmStorage.syncPrimaryAlarmWithProfile(
       profileId: p.id,
       hour: p.reminderHour,
       minute: p.reminderMinute,
     );
-    load();
+    await load();
   }
 
   Future<void> deleteProfile(String id) async {
+    for (final alarm in getAlarms().where((a) => a.linkedProfileId == id)) {
+      await notifications.cancel(alarm.nativeId);
+      await alarmStorage.deleteAlarm(alarm.id);
+    }
     await notifications.cancel(id.hashCode);
     await storage.deleteProfile(id);
     if (_activeProfileId == id) {
-      _activeProfileId = null;
+      _activeProfileId = storage.getProfiles().firstOrNull?.id;
+      if (_activeProfileId != null)
+        await storage.setActiveProfileId(_activeProfileId!);
+      else
+        await storage.settingsBox.delete('activeProfileId');
     }
-    load();
+    await load();
   }
 
   Future<void> setActiveProfile(String id) async {
@@ -282,16 +316,6 @@ class AppProvider extends ChangeNotifier {
     _lastTodayStatus = entryFor(todayDate)?.status;
     notifyListeners();
     WidgetService.updateWidgets(this);
-  }
-
-  Future<void> _scheduleReminder(Profile p) async {
-    await notifications.scheduleDailyReminder(
-      id: p.id.hashCode,
-      profileId: p.id,
-      profileName: p.name,
-      hour: p.reminderHour,
-      minute: p.reminderMinute,
-    );
   }
 
   // ---- Attendance ----
@@ -342,18 +366,20 @@ class AppProvider extends ChangeNotifier {
     WidgetService.updateWidgets(this);
   }
 
-  Future<void> mark(DateTime date, AttendanceStatus status,
-      {HalfType? half}) async {
+  Future<void> mark(
+    DateTime date,
+    AttendanceStatus status, {
+    HalfType? half,
+  }) async {
     final p = activeProfile;
     if (p == null) return;
     final entry = AttendanceEntry(
-        status, status == AttendanceStatus.halfDay ? (half ?? HalfType.firstHalf) : null);
+      status,
+      status == AttendanceStatus.halfDay ? (half ?? HalfType.firstHalf) : null,
+    );
     await storage.setStatusRaw(p.id, date, entry.toStorage());
 
-    // Stop/cancel reminders for that day once Present is marked
-    if (status == AttendanceStatus.present) {
-      notifications.cancel(p.id.hashCode);
-    }
+    // Storage cancels today's follow-up for every marked status, not future days.
 
     // Update active geofence/tracking service state
     gpsAttendance.updateTrackingState();
@@ -381,23 +407,32 @@ class AppProvider extends ChangeNotifier {
 
   Map<DateTime, AttendanceEntry> recordsFor(String profileId) {
     final raw = storage.getAllForProfile(profileId);
-    final result = raw.map((k, v) => MapEntry(k, AttendanceEntry.fromStorage(v)));
+    final result = raw.map(
+      (k, v) => MapEntry(k, AttendanceEntry.fromStorage(v)),
+    );
 
     // Find the profile to get the start date
     final p = _profiles.firstWhere(
       (p) => p.id == profileId,
-      orElse: () => activeProfile ?? Profile(id: '', name: '', startDate: DateTime.now()),
+      orElse: () =>
+          activeProfile ?? Profile(id: '', name: '', startDate: DateTime.now()),
     );
     if (p.id.isNotEmpty) {
-      final start = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
+      final start = DateTime(
+        p.startDate.year,
+        p.startDate.month,
+        p.startDate.day,
+      );
       final end = DateTime.now().add(const Duration(days: 365));
       var d = start;
       while (!d.isAfter(end)) {
-        if (d.weekday == DateTime.sunday ||
-            p.holidays.contains(_dateKey(d))) {
+        if (d.weekday == DateTime.sunday || p.holidays.contains(_dateKey(d))) {
           final normalized = DateTime(d.year, d.month, d.day);
           if (!result.containsKey(normalized)) {
-            result[normalized] = AttendanceEntry(AttendanceStatus.holiday, null);
+            result[normalized] = AttendanceEntry(
+              AttendanceStatus.holiday,
+              null,
+            );
           }
         }
         d = d.add(const Duration(days: 1));
@@ -406,8 +441,11 @@ class AppProvider extends ChangeNotifier {
     return result;
   }
 
-
-  bool isSandwichLeave(String profileId, DateTime date, Map<DateTime, AttendanceEntry> records) {
+  bool isSandwichLeave(
+    String profileId,
+    DateTime date,
+    Map<DateTime, AttendanceEntry> records,
+  ) {
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     // Search backward for the nearest non-holiday status (could be marked or virtual non-holiday)
@@ -473,8 +511,9 @@ class AppProvider extends ChangeNotifier {
       final perDay = p.monthlySalary / daysInMonth;
 
       final manualRecords = storage.getAllForProfile(p.id);
-      final manualDatesInMonth = manualRecords.keys.where((date) =>
-          date.year == month.year && date.month == month.month).toList();
+      final manualDatesInMonth = manualRecords.keys
+          .where((date) => date.year == month.year && date.month == month.month)
+          .toList();
 
       if (manualDatesInMonth.isEmpty) {
         return AttendanceStats(
@@ -492,10 +531,18 @@ class AppProvider extends ChangeNotifier {
         );
       }
 
-      final endDay = manualDatesInMonth.map((d) => d.day).reduce((a, b) => a > b ? a : b);
+      final endDay = manualDatesInMonth
+          .map((d) => d.day)
+          .reduce((a, b) => a > b ? a : b);
       DateTime monthStart = DateTime(month.year, month.month, 1);
-      final pStart = DateTime(p.startDate.year, p.startDate.month, p.startDate.day);
-      if (pStart.isAfter(monthStart) && pStart.year == month.year && pStart.month == month.month) {
+      final pStart = DateTime(
+        p.startDate.year,
+        p.startDate.month,
+        p.startDate.day,
+      );
+      if (pStart.isAfter(monthStart) &&
+          pStart.year == month.year &&
+          pStart.month == month.month) {
         monthStart = pStart;
       }
 
@@ -631,26 +678,28 @@ class AppProvider extends ChangeNotifier {
   List<AlarmItem> getAlarms() => alarmStorage.getAlarms();
 
   Future<void> saveAlarm(AlarmItem alarm) async {
+    if (alarm.isRepeating && alarm.repeatDays.isEmpty)
+      throw ArgumentError('Select at least one repeat day.');
+    if (!StorageService.supportsNative)
+      throw UnsupportedError('Scheduled alerts currently require Android.');
+    final profile = _profiles
+        .where((p) => p.id == alarm.linkedProfileId)
+        .firstOrNull;
+    await notifications.scheduleAlarm(alarm, profile?.name ?? alarm.name);
     await alarmStorage.saveAlarm(alarm);
-    // Schedule/update the alarm in the native scheduler
-    if (alarm.isEnabled) {
-      await notifications.scheduleDailyReminder(
-        id: alarm.id.hashCode,
-        profileId: alarm.linkedProfileId ?? activeProfile?.id ?? '',
-        profileName: alarm.name,
-        hour: alarm.hour,
-        minute: alarm.minute,
-      );
-    } else {
-      await notifications.cancel(alarm.id.hashCode);
+    if (alarm.isPrimary && profile != null) {
+      profile.reminderHour = alarm.hour;
+      profile.reminderMinute = alarm.minute;
+      await storage.saveProfile(profile);
+      gpsAttendance.updateTrackingState();
     }
     notifyListeners();
   }
 
   Future<void> deleteAlarm(String alarmId) async {
     final alarm = alarmStorage.getAlarm(alarmId);
-    if (alarm != null && alarm.isPrimary) return; // Cannot delete primary
-    await notifications.cancel(alarmId.hashCode);
+    if (alarm == null || alarm.isPrimary) return;
+    await notifications.cancel(alarm.nativeId);
     await alarmStorage.deleteAlarm(alarmId);
     notifyListeners();
   }
@@ -659,18 +708,6 @@ class AppProvider extends ChangeNotifier {
     final alarm = alarmStorage.getAlarm(alarmId);
     if (alarm == null) return;
     alarm.isEnabled = enabled;
-    await alarmStorage.saveAlarm(alarm);
-    if (enabled) {
-      await notifications.scheduleDailyReminder(
-        id: alarm.id.hashCode,
-        profileId: alarm.linkedProfileId ?? activeProfile?.id ?? '',
-        profileName: alarm.name,
-        hour: alarm.hour,
-        minute: alarm.minute,
-      );
-    } else {
-      await notifications.cancel(alarm.id.hashCode);
-    }
-    notifyListeners();
+    await saveAlarm(alarm);
   }
 }
